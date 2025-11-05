@@ -38,8 +38,8 @@ export default function H5PPlayer({ path }: H5PPlayerProps) {
         
         // FIXED: Remove /h5p.json from the path since the library appends it automatically
         new window.H5PStandalone.H5P(containerRef.current, {
-          h5pJsonPath: `/h5p-content/${path}`,              // Remove /h5p.json from here
-          contentJsonPath: `/h5p-content/${path}/content`, // This should point to the folder containing content.json
+          h5pJsonPath: `/h5p-content/${path}`,
+          contentJsonPath: `/h5p-content/${path}/content`,
           frameJs: '/h5p/frame.bundle.js',
           frameCss: '/h5p/styles/h5p.css',
           fullScreen: false,
@@ -64,7 +64,7 @@ export default function H5PPlayer({ path }: H5PPlayerProps) {
     } else {
       // Load H5P standalone script dynamically
       const script = document.createElement('script');
-      script.src = '/js/h5p-standalone.min.js';
+      script.src = '/lib/h5p-standalone.min.js';
       script.onload = loadH5P;
       script.onerror = () => {
         setError('Failed to load H5P library');
