@@ -4,7 +4,7 @@ export default function QuizPage() {
   return (
     <div>
       <h1>Bio Quiz</h1>
-      <H5PPlayer path="/h5p-content/practice-questions" />
+      <H5PPlayer path="practice-questions" />
     </div>
   );
 }

@@ -34,7 +34,7 @@
     "**/*.mts",
     "**/*.ts",
     "**/*.tsx"
-, "components/H5PPlayer.jsx"  ],
+, "components/H5PPlayer.tsx"  ],
   "exclude": [
     "node_modules"
   ]
