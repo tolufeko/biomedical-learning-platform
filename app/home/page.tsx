@@ -20,7 +20,7 @@ export default function HomePage() {
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
           <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
-            Chnage Password
+            Change Password
           </Link>
           <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide

@@ -992,4 +992,10 @@ button.h5p-core-cancel-button:focus {
   .table-overflow-protection {
     clear: both;
   }
+
+  /* ===== MINIMAL QUIZ FORMATTING ===== */
+  .h5p-multichoice {
+    background: #f8fafc !important;
+    padding: 30px !important;
+  }
 }
