@@ -124,8 +124,7 @@ export default function H5PPlayer({ path }: H5PPlayerProps) {
       )}
       <div 
         ref={containerRef} 
-        style={{ minHeight: '400px' }}
-        className="border rounded-lg"
+        className="border"
       />
     </div>
   );
