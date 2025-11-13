@@ -26,7 +26,7 @@ export default function H5PPlayer({ path }: H5PPlayerProps) {
       if (!containerRef.current || !isMounted) return;
 
       try {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         if (!window.H5PStandalone) {
           setError('H5P library failed to load');
