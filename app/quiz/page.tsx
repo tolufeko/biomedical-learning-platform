@@ -5,17 +5,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import H5PPlayer from '@/components/H5PPlayer';
+import { signOut } from "@/public/lib/utils";
 
 export default function QuizPage() {
-  const router = useRouter();
-
-  const handleSignOut = () => {
-    // Add your sign-out logic here (e.g., clear auth, call API)
-    router.push("/");
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gray-50 p-6">
       {/* Navbar */}
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
@@ -26,11 +20,11 @@ export default function QuizPage() {
           <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
             Change Password
           </Link>
-          <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>
           <button
-            onClick={handleSignOut}
+            onClick={signOut}
             className="text-gray-700 hover:text-blue-600 font-medium">
             Sign Out
           </button>
