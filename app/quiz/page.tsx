@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useSearchParams } from 'next/navigation';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,9 @@ import H5PPlayer from '@/components/H5PPlayer';
 import { signOut } from "@/public/lib/utils";
 
 export default function QuizPage() {
+  const searchParams = useSearchParams();
+  const subject = searchParams.get('subject');
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Navbar */}
@@ -33,7 +36,7 @@ export default function QuizPage() {
 
       <main className="flex flex-col items-center mt-16 px-6">
         <h2 className="text-3xl font-semibold mb-8 text-gray-800">
-          Bio Quiz
+          {subject} Quiz
         </h2>
         <div className="w-full max-w-3xl">
           <H5PPlayer path="practice-questions" />
