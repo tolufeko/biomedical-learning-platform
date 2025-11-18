@@ -42,7 +42,7 @@ export default function HomePage() {
           {/* Revision Cards */}
           <Card
             className="hover:shadow-lg transition cursor-pointer"
-            onClick={() => router.push("/quiz?subject=Neurophysiology")}
+            onClick={() => router.push("/quiz/1")}
           >
             <CardHeader>
               <CardTitle> NEUROPHYSIOLOGY </CardTitle>
@@ -56,7 +56,7 @@ export default function HomePage() {
 
           <Card
             className="hover:shadow-lg transition cursor-pointer"
-            onClick={() => router.push("/quiz?subject=Biomechanics")}
+            onClick={() => router.push("/quiz/2")}
           >
             <CardHeader>
               <CardTitle> BIOMECHANICS </CardTitle>
@@ -70,7 +70,7 @@ export default function HomePage() {
 
           <Card
             className="hover:shadow-lg transition cursor-pointer"
-            onClick={() => router.push("/quiz?subject=Cardiorespiratory_Physiology")}
+            onClick={() => router.push("/quiz/3")}
           >
             <CardHeader>
               <CardTitle> CARDIORESPIRATORY PHYSIOLOGY </CardTitle>
