@@ -6,16 +6,39 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> } // params is now a Promise
+) {
+  try {
+    const { id } = await params; // Await the params
+    
+    console.log("API ROUTE PARAM:", id);
 
-  const { data, error } = await supabase
-    .from("quizzes")
-    .select("*")
-    .eq("id", id)
-    .single();
+    if (!id) {
+      return NextResponse.json({ error: "Quiz ID is required" }, { status: 400 });
+    }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data, error } = await supabase
+      .from("quizzes")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-  return NextResponse.json(data);
+    if (error) {
+      console.error("Supabase error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+    }
+
+    console.log("Quiz data found:", data);
+    return NextResponse.json(data);
+
+  } catch (err: any) {
+    console.error("API error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }

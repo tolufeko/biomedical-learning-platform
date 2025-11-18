@@ -2,11 +2,100 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { signOut } from "@/public/lib/utils";
+
+interface Quiz {
+  id: string; // Changed from number to string for UUID
+  title: string;
+  description: string;
+}
 
 export default function HomePage() {
   const router = useRouter();
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchQuizzes = async () => {
+      try {
+        const response = await fetch('/api/get-quizzes');
+        if (!response.ok) {
+          throw new Error('Failed to fetch quizzes');
+        }
+        const data = await response.json();
+        setQuizzes(data);
+      } catch (error) {
+        console.error('Error fetching quizzes:', error);
+        setError('Failed to load subjects. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuizzes();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
+          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
+          <div className="flex gap-6 items-center">
+            <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
+              Change Password
+            </Link>
+            <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
+              Guide
+            </Link>
+            <button
+              onClick={signOut}
+              className="text-gray-700 hover:text-blue-600 font-medium">
+              Sign Out
+            </button>
+          </div>
+        </nav>
+        <main className="flex flex-col items-center justify-center mt-16 px-6">
+          <div className="text-gray-600">Loading subjects...</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
+          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
+          <div className="flex gap-6 items-center">
+            <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
+              Change Password
+            </Link>
+            <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
+              Guide
+            </Link>
+            <button
+              onClick={signOut}
+              className="text-gray-700 hover:text-blue-600 font-medium">
+              Sign Out
+            </button>
+          </div>
+        </nav>
+        <main className="flex flex-col items-center justify-center mt-16 px-6">
+          <div className="text-red-600 bg-red-50 p-4 rounded-lg">{error}</div>
+          <Button 
+            onClick={() => window.location.reload()} 
+            className="mt-4"
+          >
+            Retry
+          </Button>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -39,49 +128,31 @@ export default function HomePage() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl w-full">
-          {/* Revision Cards */}
-          <Card
-            className="hover:shadow-lg transition cursor-pointer"
-            onClick={() => router.push("/quiz/1")}
-          >
-            <CardHeader>
-              <CardTitle> NEUROPHYSIOLOGY </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                The study of how the nervous system functions, including how neurons communicate and control body processes.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className="hover:shadow-lg transition cursor-pointer"
-            onClick={() => router.push("/quiz/2")}
-          >
-            <CardHeader>
-              <CardTitle> BIOMECHANICS </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                The application of mechanical principles to understand how biological structures move and bear forces.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className="hover:shadow-lg transition cursor-pointer"
-            onClick={() => router.push("/quiz/3")}
-          >
-            <CardHeader>
-              <CardTitle> CARDIORESPIRATORY PHYSIOLOGY </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                The study of how the heart, lungs, and blood vessels work together to deliver oxygen and remove carbon dioxide from the body.
-              </p>
-            </CardContent>
-          </Card>
+          {/* Dynamic Quiz Cards */}
+          {quizzes.map((quiz) => (
+            <Card
+              key={quiz.id}
+              className="hover:shadow-lg transition cursor-pointer"
+              onClick={() => router.push(`/quiz/${quiz.id}`)} // Uses UUID in URL
+            >
+              <CardHeader>
+                <CardTitle className="text-lg">{quiz.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  {quiz.description}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
+
+        {/* Fallback if no quizzes exist */}
+        {quizzes.length === 0 && (
+          <div className="text-center text-gray-500 mt-8">
+            No subjects available at the moment.
+          </div>
+        )}
       </main>
     </div>
   );
