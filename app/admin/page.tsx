@@ -9,11 +9,13 @@ import { signOut } from "@/public/lib/utils";
 interface Quiz {
   id: string;
   title: string;
+  description: string;
 }
 
 export default function AdminPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export default function AdminPage() {
       const res = await fetch('/api/add-quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, h5p_json: json }),
+        body: JSON.stringify({ title, description, h5p_json: json }),
       });
 
       const data = await res.json();
@@ -85,6 +87,7 @@ export default function AdminPage() {
         setError(data.error);
       } else {
         setTitle('');
+        setDescription('');
         setFile(null);
         fetchQuizzes();
       }
@@ -158,55 +161,72 @@ export default function AdminPage() {
 
       {/* Upload H5P JSON */}
       <h2 className="flex flex-col items-center text-xl font-semibold mb-3 mt-10">Upload Quizzes</h2>
-      <div className="flex flex-col md:flex-row justify-between items-center px-6 py-4 bg-white shadow-sm border-b mt-4 max-w-3xl mx-auto gap-2">
+      <div className="flex flex-col gap-4 px-6 py-4 bg-white shadow-sm border-b mt-4 max-w-3xl mx-auto">
         <input
-            type="text"
-            placeholder="Quiz title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="border p-2 rounded w-full md:mr-2"
+          type="text"
+          placeholder="Quiz title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="border p-2 rounded w-full"
+        />
+        
+        <textarea
+          placeholder="Quiz description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="border p-2 rounded w-full min-h-[80px] resize-vertical"
+          rows={3}
         />
 
-        {/* Custom file button */}
-        <label className="px-4 py-2 bg-gray-200 rounded cursor-pointer hover:bg-gray-300 mb-2 md:mb-0">
-        {file ? file.name : "Choose File"} {/* show file name if selected */}
-        <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
-        </label>
+        <div className="flex flex-col md:flex-row justify-between items-center gap-2">
+          {/* Custom file button */}
+          <label className="px-4 py-2 bg-gray-200 rounded cursor-pointer hover:bg-gray-300 w-full md:w-auto text-center">
+            {file ? file.name : "Choose File"} {/* show file name if selected */}
+            <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
+          </label>
 
-        <button
+          <button
             onClick={submitQuiz}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 w-full md:w-auto"
+          >
             Upload Quiz
-        </button>
-       </div>
-
-        {/* List of quizzes */}
-        <h2 className="text-xl font-semibold mb-4 text-center mt-10">All Quizzes</h2>
-        <div className="max-w-3xl mx-auto space-y-3">
-        {quizzes.map((quiz) => (
-            <div
-            key={quiz.id}
-            className="p-4 border rounded bg-white shadow flex justify-between items-center"
-            >
-            <p className="text-lg font-medium truncate">{quiz.title}</p>
-            <div className="flex gap-2">
-                <button
-                className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                onClick={() => console.log('Edit/Replace quiz', quiz.id)}
-                >
-                Edit
-                </button>
-                <button
-                className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                onClick={() => handleDelete(quiz.id, quiz.title)}
-                >
-                Delete
-                </button>
-            </div>
-            </div>
-        ))}
+          </button>
         </div>
+      </div>
+
+      {/* List of quizzes */}
+      <h2 className="text-xl font-semibold mb-4 text-center mt-10">All Quizzes</h2>
+      <div className="max-w-3xl mx-auto space-y-3">
+        {quizzes.map((quiz) => (
+          <div
+            key={quiz.id}
+            className="p-4 border rounded bg-white shadow"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex-1">
+                <p className="text-lg font-medium truncate">{quiz.title}</p>
+                {quiz.description && (
+                  <p className="text-gray-600 text-sm mt-1">{quiz.description}</p>
+                )}
+              </div>
+              <div className="flex gap-2 ml-4">
+                <button
+                  className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                  onClick={() => console.log('Edit/Replace quiz', quiz.id)}
+                >
+                  Edit
+                </button>
+                <button
+                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                  onClick={() => handleDelete(quiz.id, quiz.title)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

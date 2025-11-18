@@ -9,15 +9,19 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, h5p_json } = body;
-
+    const { title, description, h5p_json } = body;
+    
     if (!title || !h5p_json) {
       return NextResponse.json({ error: "Missing title or H5P JSON" }, { status: 400 });
     }
 
     const { data, error } = await supabase
       .from("quizzes")
-      .insert({ title, h5p_json })
+      .insert({ 
+        title, 
+        description: description || null,
+        h5p_json 
+      })
       .select()
       .single();
 
