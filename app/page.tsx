@@ -1,19 +1,74 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { supabase } from "@/public/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Listen to auth changes (login/logout) and update state
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUser(user);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user?.id) fetchUserRole(session.user.id);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const fetchUserRole = async (userId: string) => {
+    const { data: profileData, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    if (!error && profileData) {
+      setRole(profileData.role);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Logging in with:\nEmail: ${email}\nPassword: ${password}`);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert("Login failed: " + error.message);
+      return;
+    }
+
+    if (data.user?.id) await fetchUserRole(data.user.id);
     router.push("/home");
-    // Later you’ll connect this to your real auth system
+  };
+
+  const handleAnonymousRegister = async () => {
+    // Create a local session without database entry
+    const guestUser = {
+      id: `guest-${Date.now()}`,
+      email: "guest@temporary.com",
+      role: "guest"
+    };
+  
+    // Store in local state/session storage
+    localStorage.setItem('guestUser', JSON.stringify(guestUser));
+    setUser(guestUser);
+    setRole("guest");
+    
+    router.push("/home");
   };
 
   return (
@@ -58,8 +113,15 @@ export default function LoginPage() {
             className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-colors">
             Log In
           </button>
+
+          <button
+            type="button"
+            onClick={handleAnonymousRegister}
+            className="w-full bg-gray-600 text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors">
+            Continue as Guest
+          </button>
         </form>
-        
+
         <p className="text-sm text-center text-gray-600 mt-4">
           Don’t have an account?{" "}
           <Link href="/register" className="text-blue-600 hover:underline">

@@ -6,9 +6,10 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/public/lib/utils";
+import { useAuth } from "@/public/lib/AuthContext";
 
 interface Quiz {
-  id: string; // Changed from number to string for UUID
+  id: string;
   title: string;
   description: string;
 }
@@ -18,6 +19,7 @@ export default function HomePage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { username, role } = useAuth();
 
   useEffect(() => {
     const fetchQuizzes = async () => {
@@ -39,73 +41,13 @@ export default function HomePage() {
     fetchQuizzes();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-          <div className="flex gap-6 items-center">
-            <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
-              Change Password
-            </Link>
-            <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
-              Guide
-            </Link>
-            <button
-              onClick={signOut}
-              className="text-gray-700 hover:text-blue-600 font-medium">
-              Sign Out
-            </button>
-          </div>
-        </nav>
-        <main className="flex flex-col items-center justify-center mt-16 px-6">
-          <div className="text-gray-600">Loading subjects...</div>
-        </main>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-          <div className="flex gap-6 items-center">
-            <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
-              Change Password
-            </Link>
-            <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
-              Guide
-            </Link>
-            <button
-              onClick={signOut}
-              className="text-gray-700 hover:text-blue-600 font-medium">
-              Sign Out
-            </button>
-          </div>
-        </nav>
-        <main className="flex flex-col items-center justify-center mt-16 px-6">
-          <div className="text-red-600 bg-red-50 p-4 rounded-lg">{error}</div>
-          <Button 
-            onClick={() => window.location.reload()} 
-            className="mt-4"
-          >
-            Retry
-          </Button>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Navbar */}
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
-          <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
-            Change Password
-          </Link>
+          {username ? `${username} (${role})` : "Guest"}
           <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>

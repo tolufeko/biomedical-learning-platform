@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { signOut } from "@/public/lib/utils";
+import { useAuth } from "@/public/lib/AuthContext";
 
 interface Quiz {
   id: string;
@@ -17,12 +18,8 @@ export default function AdminPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  const changeErrorMessage = () => {
-    setText("This paragraph just changed dynamically!");
-  };
+  const { username, role } = useAuth();
 
   // Clear error after a delay
   useEffect(() => {
@@ -130,9 +127,7 @@ export default function AdminPage() {
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
-          <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
-            Change Password
-          </Link>
+          {username ? `${username} (${role})` : "Guest"}
           <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>
