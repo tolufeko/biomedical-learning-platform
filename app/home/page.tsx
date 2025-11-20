@@ -47,7 +47,12 @@ export default function HomePage() {
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
-          {username ? `${username} (${role})` : "Guest"}
+          {username ? `${username}` : "Guest"}
+          {role === 'admin' && (
+          <Link href="admin/" className="text-gray-700 hover:text-blue-600 font-medium">
+            Admin View
+          </Link>
+          )}
           <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>

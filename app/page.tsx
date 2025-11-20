@@ -35,7 +35,9 @@ export default function LoginPage() {
 
     if (!error && profileData) {
       setRole(profileData.role);
+      return profileData.role;
     }
+    return null;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -51,20 +53,25 @@ export default function LoginPage() {
       return;
     }
 
-    if (data.user?.id) await fetchUserRole(data.user.id);
-    router.push("/home");
+    if (data.user?.id) {
+      const userRole = await fetchUserRole(data.user.id);
+      
+      if (userRole === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/home");
+      }
+    }
   };
 
   const handleAnonymousRegister = async () => {
-    // Create a local session without database entry
     const guestUser = {
       id: `guest-${Date.now()}`,
       email: "guest@temporary.com",
       role: "guest"
     };
-  
-    // Store in local state/session storage
-    localStorage.setItem('guestUser', JSON.stringify(guestUser));
+
+    sessionStorage.setItem('guestUser', JSON.stringify(guestUser));
     setUser(guestUser);
     setRole("guest");
     
@@ -123,7 +130,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-sm text-center text-gray-600 mt-4">
-          Don’t have an account?{" "}
+          Don't have an account?{" "}
           <Link href="/register" className="text-blue-600 hover:underline">
             Register
           </Link>
