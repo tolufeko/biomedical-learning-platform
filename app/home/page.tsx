@@ -53,6 +53,11 @@ export default function HomePage() {
             Admin View
           </Link>
           )}
+          {role === 'teacher' || role === 'admin' && (
+          <Link href="teacher/" className="text-gray-700 hover:text-blue-600 font-medium">
+            Teacher View
+          </Link>
+          )}
           <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>

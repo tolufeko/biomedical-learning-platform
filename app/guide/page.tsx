@@ -19,6 +19,11 @@ export default function HelpPage() {
             Admin View
           </Link>
           )}
+          {role === 'teacher' || role === 'admin' && (
+          <Link href="teacher/" className="text-gray-700 hover:text-blue-600 font-medium">
+            Teacher View
+          </Link>
+          )}
           <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
             Home
           </Link>

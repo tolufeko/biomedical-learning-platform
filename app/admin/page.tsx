@@ -1,125 +1,157 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/public/lib/supabaseClient";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { signOut } from "@/public/lib/utils";
 import { useAuth } from "@/public/lib/AuthContext";
 
-interface Quiz {
+interface UserProfile {
   id: string;
-  title: string;
-  description: string;
+  username: string;
+  email: string;
+  role: string;
 }
 
-export default function AdminPage() {
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export default function AdminDashboard() {
+  const router = useRouter();
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
   const { username, role } = useAuth();
 
-  // Clear error after a delay
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  // Fetch all quizzes from Supabase
-  const fetchQuizzes = async () => {
-    try {
-      const res = await fetch('/api/get-quizzes');
-      const data = await res.json();
-      setQuizzes(data || []);
-    } catch (err) {
-      setError('Failed to fetch quizzes');
-    }
-  };
-
-  useEffect(() => {
-    fetchQuizzes();
+    checkAdminAccess();
   }, []);
 
-  // Handle file selection
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-      setError(null); // Clear error when new file is selected
+  useEffect(() => {
+    if (userRole === "admin") {
+      fetchUsers();
     }
-  };
+  }, [userRole]);
 
-  // Upload new quiz
-  const submitQuiz = async () => {
-    setError(null);
+  useEffect(() => {
+    const filtered = users.filter(user =>
+      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredUsers(filtered);
+  }, [searchTerm, users]);
 
-    if (!title || !file) {
-      setError('Please provide a title and JSON file');
-      return;
-    }
-
+  const checkAdminAccess = async () => {
     try {
-      const text = await file.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        setError('Invalid JSON file');
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        router.push("/login");
         return;
       }
 
-      const res = await fetch('/api/add-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, h5p_json: json }),
-      });
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
 
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setTitle('');
-        setDescription('');
-        setFile(null);
-        fetchQuizzes();
+      if (error) {
+        console.error("Error fetching profile:", error);
+        router.push("/home");
+        return;
       }
-    } catch (err) {
-      setError('Failed to upload quiz');
+
+      if (profile?.role !== "admin") {
+        router.push("/home");
+        return;
+      }
+
+      setUserRole(profile.role);
+    } catch (error) {
+      console.error("Error checking admin access:", error);
+      router.push("/home");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Delete quiz
-  const handleDelete = async (quizId: string, quizTitle: string) => {
-    if (!confirm(`Are you sure you want to delete "${quizTitle}"?`)) return;
-
-    setError(null);
-
+  const fetchUsers = async () => {
     try {
-      const res = await fetch(`/api/delete-quiz/${quizId}`, { 
-        method: 'DELETE' 
-      });
+      setMessage("");
       
-      console.log("Response status:", res.status);
-      console.log("Response OK:", res.ok);
-      
-      const data = await res.json();
-      console.log("Response data:", data);
-      
-      if (!res.ok) {
-        throw new Error(data.error || `HTTP error! status: ${res.status}`);
+      // Only select columns that exist in your table
+      const { data: profiles, error } = await supabase
+        .from("profiles")
+        .select("id, username, email, role")
+        .limit(1000);
+
+      if (error) {
+        console.error("Supabase query error:", error);
+        setMessage(`Error loading users: ${error.message}`);
+        return;
       }
-      
-      fetchQuizzes();
-    } catch (err) {
-      console.error('Delete error:', err);
-      setError(`Failed to delete quiz: ${err instanceof Error ? err.message : 'Unknown error'}`);
+
+      setUsers(profiles || []);
+      setFilteredUsers(profiles || []);
+    } catch (error: any) {
+      console.error("Error fetching users:", error);
+      setMessage(`Error: ${error.message}`);
     }
   };
+
+  const updateUserRole = async (userId: string, newRole: string) => {
+    try {
+      setUpdating(userId);
+      setMessage("");
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role: newRole })
+        .eq("id", userId);
+
+      if (error) {
+        console.error("Update error:", error);
+        throw error;
+      }
+
+      // Update local state
+      setUsers(prevUsers =>
+        prevUsers.map(user =>
+          user.id === userId ? { ...user, role: newRole } : user
+        )
+      );
+
+      setMessage(`Role updated successfully to ${newRole}`);
+    } catch (error: any) {
+      console.error("Error updating role:", error);
+      setMessage(`Error updating role: ${error.message}`);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleRoleChange = (userId: string, newRole: string) => {
+    if (confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
+      updateUserRole(userId, newRole);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (userRole !== "admin") {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -128,6 +160,11 @@ export default function AdminPage() {
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
           {username ? `${username}` : "Guest"}
+          {role === 'teacher' || role === 'admin' && (
+          <Link href="teacher/" className="text-gray-700 hover:text-blue-600 font-medium">
+            Teacher View
+          </Link>
+          )}
           <Link href="home/" className="text-gray-700 hover:text-blue-600 font-medium">
             Home
           </Link>
@@ -141,90 +178,106 @@ export default function AdminPage() {
           </button>
         </div>
       </nav>
-
-      {/* Error Message */}
-      {error && (
-        <div className="max-w-3xl mx-auto mt-6">
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-            <span className="block sm:inline">{error}</span>
+      
+        {/* User Management Section */}
+        <div className="p-6 bg-white rounded-lg shadow-md mt-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">User Management</h2>
+          
+          {/* Search and Refresh */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <input
+              type="text"
+              placeholder="Search by username, email, role, or user ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
             <button
-              onClick={() => setError(null)}
-              className="absolute top-0 right-0 px-4 py-3"
+              onClick={fetchUsers}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
             >
-              ×
+              Refresh Users
             </button>
           </div>
-        </div>
-      )}
 
-      {/* Upload H5P JSON */}
-      <h2 className="flex flex-col items-center text-xl font-semibold mb-3 mt-10">Upload Quizzes</h2>
-      <div className="flex flex-col gap-4 px-6 py-4 bg-white shadow-sm border-b mt-4 max-w-3xl mx-auto">
-        <input
-          type="text"
-          placeholder="Quiz title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="border p-2 rounded w-full"
-        />
-        
-        <textarea
-          placeholder="Quiz description (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="border p-2 rounded w-full min-h-[80px] resize-vertical"
-          rows={3}
-        />
-
-        <div className="flex flex-col md:flex-row justify-between items-center gap-2">
-          {/* Custom file button */}
-          <label className="px-4 py-2 bg-gray-200 rounded cursor-pointer hover:bg-gray-300 w-full md:w-auto text-center">
-            {file ? file.name : "Choose File"} {/* show file name if selected */}
-            <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
-          </label>
-
-          <button
-            onClick={submitQuiz}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 w-full md:w-auto"
-          >
-            Upload Quiz
-          </button>
-        </div>
-      </div>
-
-      {/* List of quizzes */}
-      <h2 className="text-xl font-semibold mb-4 text-center mt-10">All Quizzes</h2>
-      <div className="max-w-3xl mx-auto space-y-3">
-        {quizzes.map((quiz) => (
-          <div
-            key={quiz.id}
-            className="p-4 border rounded bg-white shadow"
-          >
-            <div className="flex justify-between items-start mb-2">
-              <div className="flex-1">
-                <p className="text-lg font-medium truncate">{quiz.title}</p>
-                {quiz.description && (
-                  <p className="text-gray-600 text-sm mt-1">{quiz.description}</p>
-                )}
-              </div>
-              <div className="flex gap-2 ml-4">
-                <button
-                  className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                  onClick={() => console.log('Edit/Replace quiz', quiz.id)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  onClick={() => handleDelete(quiz.id, quiz.title)}
-                >
-                  Delete
-                </button>
-              </div>
+          {/* Message */}
+          {message && (
+            <div className={`mb-4 p-3 rounded-lg ${
+              message.includes("Error") ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+            }`}>
+              {message}
             </div>
+          )}
+
+          {/* Users Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-200">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border border-gray-200 p-3 text-left font-semibold">Username</th>
+                  <th className="border border-gray-200 p-3 text-left font-semibold">Email</th>
+                  <th className="border border-gray-200 p-3 text-left font-semibold">Current Role</th>
+                  <th className="border border-gray-200 p-3 text-left font-semibold">Change Role</th>
+                  <th className="border border-gray-200 p-3 text-left font-semibold">User ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="border border-gray-200 p-3 text-center text-gray-500">
+                      {users.length === 0 ? "No users found in database" : "No users match your search"}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="border border-gray-200 p-3 font-medium">
+                        {user.username}
+                      </td>
+                      <td className="border border-gray-200 p-3">
+                        {user.email || "No email"}
+                      </td>
+                      <td className="border border-gray-200 p-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          user.role === 'admin' 
+                            ? 'bg-purple-100 text-purple-800'
+                            : user.role === 'teacher'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td className="border border-gray-200 p-3">
+                        <select
+                          value={user.role}
+                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                          disabled={updating === user.id}
+                          className="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                        >
+                          <option value="student">Student</option>
+                          <option value="teacher">Teacher</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        {updating === user.id && (
+                          <span className="ml-2 text-sm text-gray-500">Updating...</span>
+                        )}
+                      </td>
+                      <td className="border border-gray-200 p-3 text-sm text-gray-600 font-mono">
+                        {user.id.substring(0, 8)}...
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        ))}
+
+          {/* Summary */}
+          <div className="mt-4 text-sm text-gray-600">
+            Showing {filteredUsers.length} of {users.length} users
+          </div>
+        </div>
       </div>
-    </div>
   );
 }
