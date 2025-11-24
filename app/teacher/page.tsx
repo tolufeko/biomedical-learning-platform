@@ -19,8 +19,30 @@ export default function AdminPage() {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { username, role } = useAuth();
+  const { username, role, user } = useAuth();
   const [quizSearchTerm, setQuizSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  // Check if user is teacher or admin
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!user) {
+        router.push("/");
+        return;
+      }
+
+      // Allow access only for teachers and admins
+      if (role !== 'teacher' && role !== 'admin') {
+        router.push("/home");
+        return;
+      }
+
+      setLoading(false);
+    };
+
+    checkAccess();
+  }, [user, role, router]);
 
   // Clear error after a delay
   useEffect(() => {
@@ -44,8 +66,10 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    fetchQuizzes();
-  }, []);
+    if (role === 'teacher' || role === 'admin') {
+      fetchQuizzes();
+    }
+  }, [role]);
 
   // Handle file selection
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,6 +146,20 @@ export default function AdminPage() {
     }
   };
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  // If user doesn't have access, don't render the page
+  if (role !== 'teacher' && role !== 'admin') {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Navbar */}
@@ -130,14 +168,14 @@ export default function AdminPage() {
         <div className="flex gap-6 items-center">
           {username ? `${username}` : "Guest"}
           {role === 'admin' && (
-          <Link href="admin/" className="text-gray-700 hover:text-blue-600 font-medium">
-            Admin View
-          </Link>
+            <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
+              Admin View
+            </Link>
           )}
-          <Link href="home/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
             Home
           </Link>
-          <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>
           <button

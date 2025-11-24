@@ -50,7 +50,7 @@ export default function AdminDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        router.push("/login");
+        router.push("/");
         return;
       }
 
@@ -160,7 +160,7 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
           {username ? `${username}` : "Guest"}
-          {role === 'teacher' || role === 'admin' && (
+          {(role === 'teacher' || role === 'admin') && (
           <Link href="teacher/" className="text-gray-700 hover:text-blue-600 font-medium">
             Teacher View
           </Link>
