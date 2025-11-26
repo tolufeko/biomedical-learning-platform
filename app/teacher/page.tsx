@@ -6,22 +6,26 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { signOut } from "@/public/lib/utils";
 import { useAuth } from "@/public/lib/AuthContext";
+import QuestionForm from "@/components/QuestionForm";
 
-interface Quiz {
+interface CustomForm {
   id: string;
   title: string;
-  description: string;
+  description?: string;
+  questions: any[];
+  created_at: string;
+  updated_at: string;
+  user_id: string;
 }
 
 export default function AdminPage() {
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [customForms, setCustomForms] = useState<CustomForm[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const { username, role, user } = useAuth();
-  const [quizSearchTerm, setQuizSearchTerm] = useState("");
+  const [formSearchTerm, setFormSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [formsLoading, setFormsLoading] = useState(false);
   const router = useRouter();
 
   // Check if user is teacher or admin
@@ -44,102 +48,85 @@ export default function AdminPage() {
     checkAccess();
   }, [user, role, router]);
 
-  // Clear error after a delay
+  // Clear messages after a delay
   useEffect(() => {
-    if (error) {
+    if (error || success) {
       const timer = setTimeout(() => {
         setError(null);
+        setSuccess(null);
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [error]);
+  }, [error, success]);
 
-  // Fetch all quizzes from Supabase
-  const fetchQuizzes = async () => {
+  // Fetch custom forms
+  const fetchCustomForms = async () => {
+    setFormsLoading(true);
     try {
-      const res = await fetch('/api/get-quizzes');
-      const data = await res.json();
-      setQuizzes(data || []);
+      const res = await fetch('/api/custom-forms');
+      if (res.ok) {
+        const data = await res.json();
+        setCustomForms(data || []);
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to fetch forms');
+      }
     } catch (err) {
-      setError('Failed to fetch quizzes');
+      console.error('Failed to fetch custom forms:', err);
+      setError('Failed to load custom forms');
+    } finally {
+      setFormsLoading(false);
     }
   };
 
   useEffect(() => {
     if (role === 'teacher' || role === 'admin') {
-      fetchQuizzes();
+      fetchCustomForms();
     }
   }, [role]);
 
-  // Handle file selection
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-      setError(null); // Clear error when new file is selected
-    }
-  };
-
-  // Upload new quiz
-  const submitQuiz = async () => {
-    setError(null);
-
-    if (!title || !file) {
-      setError('Please provide a title and JSON file');
-      return;
-    }
-
+  // Handle custom form submission
+  const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string }) => {
     try {
-      const text = await file.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        setError('Invalid JSON file');
-        return;
-      }
-
-      const res = await fetch('/api/add-quiz', {
+      const response = await fetch('/api/custom-forms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, h5p_json: json }),
+        body: JSON.stringify(formData),
       });
 
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
+      const result = await response.json();
+
+      if (response.ok) {
+        setSuccess('Quiz created successfully!');
+        fetchCustomForms();
       } else {
-        setTitle('');
-        setDescription('');
-        setFile(null);
-        fetchQuizzes();
+        throw new Error(result.error || 'Failed to create quiz');
       }
-    } catch (err) {
-      setError('Failed to upload quiz');
+    } catch (error) {
+      console.error('Error saving custom form:', error);
+      setError(`Failed to create quiz: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Delete quiz
-  const handleDelete = async (quizId: string, quizTitle: string) => {
-    if (!confirm(`Are you sure you want to delete "${quizTitle}"?`)) return;
+  // Delete custom form
+  const handleDeleteForm = async (formId: string, formTitle: string) => {
+    if (!confirm(`Are you sure you want to delete "${formTitle}"?`)) return;
 
     setError(null);
 
     try {
-      const res = await fetch(`/api/delete-quiz/${quizId}`, { 
+      const res = await fetch(`/api/custom-forms/${formId}`, { 
         method: 'DELETE' 
       });
       
-      console.log("Response status:", res.status);
-      console.log("Response OK:", res.ok);
-      
       const data = await res.json();
-      console.log("Response data:", data);
       
       if (!res.ok) {
         throw new Error(data.error || `HTTP error! status: ${res.status}`);
       }
       
-      fetchQuizzes();
+      setSuccess('Quiz deleted successfully!');
+      fetchCustomForms();
     } catch (err) {
       console.error('Delete error:', err);
       setError(`Failed to delete quiz: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -161,7 +148,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
@@ -186,9 +173,9 @@ export default function AdminPage() {
         </div>
       </nav>
 
-      {/* Error Message */}
+      {/* Messages */}
       {error && (
-        <div className="max-w-3xl mx-auto mt-6">
+        <div className="max-w-6xl mx-auto mt-6">
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
             <span className="block sm:inline">{error}</span>
             <button
@@ -201,104 +188,160 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Upload H5P JSON */}
-      <div className="flex flex-col gap-4 px-6 py-4 bg-white shadow-sm border-b mt-4 max-w-3xl mx-auto">
-        <h2 className="flex flex-col items-center text-xl font-semibold mb-3">Upload Quizzes</h2>
-        <input
-          type="text"
-          placeholder="Quiz title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="border p-2 rounded w-full"
-        />
-        
-        <textarea
-          placeholder="Quiz description (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="border p-2 rounded w-full min-h-[80px] resize-vertical"
-          rows={3}
-        />
-
-        <div className="flex flex-col md:flex-row justify-between items-center gap-2">
-          {/* Custom file button */}
-          <label className="px-4 py-2 bg-gray-200 rounded cursor-pointer hover:bg-gray-300 w-full md:w-auto text-center">
-            {file ? file.name : "Choose File"} {/* show file name if selected */}
-            <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
-          </label>
-
-          <button
-            onClick={submitQuiz}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 w-full md:w-auto"
-          >
-            Upload Quiz
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto mt-10">
-
-      <div className="p-6 bg-white rounded-lg shadow-md mt-6">
-        <h2 className="text-xl font-semibold mb-4 text-center">All Quizzes</h2>
-        {/* Search Bar for Quizzes */}
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search quizzes by title or description..."
-            value={quizSearchTerm}
-            onChange={(e) => setQuizSearchTerm(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* List of quizzes */}
-        <div className="space-y-3">
-          {quizzes
-            .filter(quiz => 
-              quiz.title.toLowerCase().includes(quizSearchTerm.toLowerCase()) ||
-              (quiz.description && quiz.description.toLowerCase().includes(quizSearchTerm.toLowerCase()))
-            )
-            .map((quiz) => (
-              <div
-                key={quiz.id}
-                className="p-4 border rounded bg-white shadow"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <p className="text-lg font-medium truncate">{quiz.title}</p>
-                    {quiz.description && (
-                      <p className="text-gray-600 text-sm mt-1">{quiz.description}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2 ml-4">
-                    <button
-                      className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                      onClick={() => console.log('Edit/Replace quiz', quiz.id)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                      onClick={() => handleDelete(quiz.id, quiz.title)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-        </div>
-        
-        {/* Show message if no quizzes match search */}
-        {quizzes.filter(quiz => 
-          quiz.title.toLowerCase().includes(quizSearchTerm.toLowerCase()) ||
-          (quiz.description && quiz.description.toLowerCase().includes(quizSearchTerm.toLowerCase()))
-        ).length === 0 && quizSearchTerm && (
-          <div className="text-center text-gray-500 py-8">
-            No quizzes found matching "{quizSearchTerm}"
+      {success && (
+        <div className="max-w-6xl mx-auto mt-6">
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+            <span className="block sm:inline">{success}</span>
+            <button
+              onClick={() => setSuccess(null)}
+              className="absolute top-0 right-0 px-4 py-3"
+            >
+              ×
+            </button>
           </div>
-        )}
         </div>
+      )}
+
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Page Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Quiz Management</h1>
+          <p className="text-gray-600">Create and manage quizzes with automatic grading</p>
+        </div>
+
+        {/* Create Custom Form */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-2xl">Create New Quiz</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QuestionForm onFormSubmit={handleFormSubmit} />
+          </CardContent>
+        </Card>
+
+        {/* Custom Forms List */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">Your Quizzes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* Search Bar for Forms */}
+            <div className="mb-6">
+              <input
+                type="text"
+                placeholder="Search quizzes by title..."
+                value={formSearchTerm}
+                onChange={(e) => setFormSearchTerm(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Loading State */}
+            {formsLoading && (
+              <div className="text-center py-8">
+                <div className="text-lg">Loading quizzes...</div>
+              </div>
+            )}
+
+            {/* List of custom forms */}
+            {!formsLoading && (
+              <div className="space-y-4">
+                {customForms
+                  .filter(form => 
+                    form.title.toLowerCase().includes(formSearchTerm.toLowerCase())
+                  )
+                  .map((form) => (
+                    <div
+                      key={form.id}
+                      className="p-6 border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2">{form.title}</h3>
+                          {form.description && (
+                            <p className="text-gray-600 mb-3">{form.description}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
+                            <span>
+                              {form.questions?.length || 0} question{form.questions?.length !== 1 ? 's' : ''}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Created: {new Date(form.created_at).toLocaleDateString()}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Updated: {new Date(form.updated_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {form.questions?.slice(0, 5).map((q: any, idx: number) => (
+                              <span 
+                                key={idx} 
+                                className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded capitalize"
+                              >
+                                {q.type?.replace('-', ' ') || 'unknown'}
+                              </span>
+                            ))}
+                            {form.questions?.length > 5 && (
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                                +{form.questions.length - 5} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 ml-6">
+                          <button
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            onClick={() => {
+                              // View quiz - you can implement this later
+                              console.log('View quiz', form.id);
+                              alert('View quiz functionality to be implemented');
+                            }}
+                          >
+                            View
+                          </button>
+                          <button
+                            className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+                            onClick={() => {
+                              // Edit quiz - you can implement this later
+                              console.log('Edit quiz', form.id);
+                              alert('Edit quiz functionality to be implemented');
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                            onClick={() => handleDeleteForm(form.id, form.title)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+            
+            {/* Empty States */}
+            {!formsLoading && customForms.filter(form => 
+              form.title.toLowerCase().includes(formSearchTerm.toLowerCase())
+            ).length === 0 && formSearchTerm && (
+              <div className="text-center text-gray-500 py-12">
+                <div className="text-lg mb-2">No quizzes found</div>
+                <p className="text-sm">No quizzes match "{formSearchTerm}"</p>
+              </div>
+            )}
+
+            {!formsLoading && customForms.length === 0 && !formSearchTerm && (
+              <div className="text-center text-gray-500 py-12">
+                <div className="text-lg mb-2">No quizzes created yet</div>
+                <p className="text-sm">Create your first quiz using the quiz builder above!</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
