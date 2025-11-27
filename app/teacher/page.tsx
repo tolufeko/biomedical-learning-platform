@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,11 +8,22 @@ import { signOut } from "@/public/lib/utils";
 import { useAuth } from "@/public/lib/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
 
+interface FormQuestion {
+  id: string;
+  question_type: string;
+  question_text: string;
+  options: string[];
+  correct_answer: string | string[];
+  display_order: number;
+}
+
 interface CustomForm {
   id: string;
   title: string;
   description?: string;
-  questions: any[];
+  question_ids: string[]; // Array of question IDs
+  questions?: any[]; // For backward compatibility
+  form_questions: FormQuestion[]; // Full question data from join
   created_at: string;
   updated_at: string;
   user_id: string;
@@ -26,6 +37,9 @@ export default function AdminPage() {
   const [formSearchTerm, setFormSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [formsLoading, setFormsLoading] = useState(false);
+  const [editingForm, setEditingForm] = useState<CustomForm | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [resetFormKey, setResetFormKey] = useState(0); // Key to reset the QuestionForm
   const router = useRouter();
 
   // Check if user is teacher or admin
@@ -98,13 +112,54 @@ export default function AdminPage() {
 
       if (response.ok) {
         setSuccess('Quiz created successfully!');
-        fetchCustomForms();
+        setCustomForms(prevForms => [result, ...prevForms]);
+        // Reset the create form by changing the key
+        setResetFormKey(prev => prev + 1);
       } else {
         throw new Error(result.error || 'Failed to create quiz');
       }
     } catch (error) {
       console.error('Error saving custom form:', error);
       setError(`Failed to create quiz: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Handle form update
+  const handleFormUpdate = async (formData: { title: string; questions: any[]; description?: string }) => {
+    if (!editingForm) return;
+
+    try {
+      // First, delete the existing form and its questions
+      const deleteResponse = await fetch(`/api/custom-forms/${editingForm.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!deleteResponse.ok) {
+        throw new Error('Failed to delete existing quiz');
+      }
+
+      // Then create a new form with the updated data
+      const createResponse = await fetch('/api/custom-forms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await createResponse.json();
+
+      if (createResponse.ok) {
+        setSuccess('Quiz updated successfully!');
+        // Refresh the forms list
+        fetchCustomForms();
+        // Close the edit modal
+        setEditingForm(null);
+        setIsEditModalOpen(false);
+      } else {
+        throw new Error(result.error || 'Failed to update quiz');
+      }
+    } catch (error) {
+      console.error('Error updating custom form:', error);
+      setError(`Failed to update quiz: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -131,6 +186,28 @@ export default function AdminPage() {
       console.error('Delete error:', err);
       setError(`Failed to delete quiz: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
+  };
+
+  // Start editing a form
+  const handleEditForm = (form: CustomForm) => {
+    setEditingForm(form);
+    setIsEditModalOpen(true);
+  };
+
+  // Close edit modal
+  const handleCloseEditModal = () => {
+    setEditingForm(null);
+    setIsEditModalOpen(false);
+  };
+
+  // Convert form questions to the format expected by QuestionForm
+  const convertFormQuestions = (questions: FormQuestion[]) => {
+    return questions.map(q => ({
+      type: q.question_type,
+      question: q.question_text,
+      options: q.options || [],
+      correctAnswer: q.correct_answer
+    }));
   };
 
   // Show loading state
@@ -215,7 +292,10 @@ export default function AdminPage() {
             <CardTitle className="text-2xl">Create New Quiz</CardTitle>
           </CardHeader>
           <CardContent>
-            <QuestionForm onFormSubmit={handleFormSubmit} />
+            <QuestionForm 
+              key={resetFormKey} // This will reset the form when key changes
+              onFormSubmit={handleFormSubmit} 
+            />
           </CardContent>
         </Card>
 
@@ -263,7 +343,7 @@ export default function AdminPage() {
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
                             <span>
-                              {form.questions?.length || 0} question{form.questions?.length !== 1 ? 's' : ''}
+                              {form.form_questions?.length || 0} question{form.form_questions?.length !== 1 ? 's' : ''}
                             </span>
                             <span>•</span>
                             <span>
@@ -275,39 +355,31 @@ export default function AdminPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {form.questions?.slice(0, 5).map((q: any, idx: number) => (
+                            {form.form_questions?.slice(0, 5).map((q: FormQuestion, idx: number) => (
                               <span 
-                                key={idx} 
+                                key={q.id} 
                                 className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded capitalize"
                               >
-                                {q.type?.replace('-', ' ') || 'unknown'}
+                                {q.question_type?.replace('-', ' ') || 'unknown'}
                               </span>
                             ))}
-                            {form.questions?.length > 5 && (
+                            {form.form_questions?.length > 5 && (
                               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                                +{form.questions.length - 5} more
+                                +{form.form_questions.length - 5} more
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="flex gap-2 ml-6">
-                          <button
-                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                            onClick={() => {
-                              // View quiz - you can implement this later
-                              console.log('View quiz', form.id);
-                              alert('View quiz functionality to be implemented');
-                            }}
+                          <Link 
+                            href={`/quiz/${form.id}`}
+                            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-center"
                           >
                             View
-                          </button>
+                          </Link>
                           <button
                             className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
-                            onClick={() => {
-                              // Edit quiz - you can implement this later
-                              console.log('Edit quiz', form.id);
-                              alert('Edit quiz functionality to be implemented');
-                            }}
+                            onClick={() => handleEditForm(form)}
                           >
                             Edit
                           </button>
@@ -343,6 +415,34 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Modal */}
+      {isEditModalOpen && editingForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">Edit Quiz: {editingForm.title}</h2>
+                <button
+                  onClick={handleCloseEditModal}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              <QuestionForm
+                onFormSubmit={handleFormUpdate}
+                initialData={{
+                  title: editingForm.title,
+                  description: editingForm.description || '',
+                  questions: convertFormQuestions(editingForm.form_questions)
+                }}
+                isEditing={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

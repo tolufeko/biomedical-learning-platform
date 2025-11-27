@@ -161,14 +161,14 @@ export default function AdminDashboard() {
         <div className="flex gap-6 items-center">
           {username ? `${username}` : "Guest"}
           {(role === 'teacher' || role === 'admin') && (
-          <Link href="teacher/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
             Teacher View
           </Link>
           )}
-          <Link href="home/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
             Home
           </Link>
-          <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>
           <button

@@ -19,7 +19,17 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("custom_forms")
-      .select("*")
+      .select(`
+        *,
+        form_questions (
+          id,
+          question_type,
+          question_text,
+          options,
+          correct_answer,
+          display_order
+        )
+      `)
       .eq("id", id)
       .single();
 
@@ -32,16 +42,7 @@ export async function GET(
       return NextResponse.json({ error: "Form not found" }, { status: 404 });
     }
 
-    // Ensure correctAnswer fields exist
-    const transformedData = {
-      ...data,
-      questions: Array.isArray(data.questions) ? data.questions.map((q: any) => ({
-        ...q,
-        correctAnswer: q.correctAnswer || ''
-      })) : []
-    };
-
-    return NextResponse.json(transformedData);
+    return NextResponse.json(data);
 
   } catch (err: any) {
     console.error("API error:", err);
@@ -60,6 +61,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Form ID is required" }, { status: 400 });
     }
 
+    // Delete will cascade to form_questions due to ON DELETE CASCADE
     const { error } = await supabase
       .from("custom_forms")
       .delete()

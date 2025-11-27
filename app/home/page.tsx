@@ -12,6 +12,7 @@ interface Quiz {
   id: string;
   title: string;
   description: string;
+  form_questions: any[]; // Add this to match your API response
 }
 
 export default function HomePage() {
@@ -24,7 +25,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchQuizzes = async () => {
       try {
-        const response = await fetch('/api/get-quizzes');
+        const response = await fetch('/api/custom-forms'); // Updated endpoint
         if (!response.ok) {
           throw new Error('Failed to fetch quizzes');
         }
@@ -41,6 +42,82 @@ export default function HomePage() {
     fetchQuizzes();
   }, []);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
+          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
+          <div className="flex gap-6 items-center">
+            {username ? `${username}` : "Guest"}
+            {role === 'admin' && (
+              <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
+                Admin View
+              </Link>
+            )}
+            {(role === 'teacher' || role === 'admin') && (
+              <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
+                Teacher View
+              </Link>
+            )}
+            <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
+              Guide
+            </Link>
+            <button
+              onClick={signOut}
+              className="text-gray-700 hover:text-blue-600 font-medium">
+              Sign Out
+            </button>
+          </div>
+        </nav>
+        <main className="flex flex-col items-center justify-center mt-16 px-6">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="text-lg text-gray-600">Loading subjects...</div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
+          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
+          <div className="flex gap-6 items-center">
+            {username ? `${username}` : "Guest"}
+            {role === 'admin' && (
+              <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
+                Admin View
+              </Link>
+            )}
+            {(role === 'teacher' || role === 'admin') && (
+              <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
+                Teacher View
+              </Link>
+            )}
+            <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
+              Guide
+            </Link>
+            <button
+              onClick={signOut}
+              className="text-gray-700 hover:text-blue-600 font-medium">
+              Sign Out
+            </button>
+          </div>
+        </nav>
+        <main className="flex flex-col items-center justify-center mt-16 px-6">
+          <div className="text-center text-red-600">
+            <div className="text-lg mb-4">{error}</div>
+            <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700">
+              Try Again
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Navbar */}
@@ -49,16 +126,16 @@ export default function HomePage() {
         <div className="flex gap-6 items-center">
           {username ? `${username}` : "Guest"}
           {role === 'admin' && (
-          <Link href="admin/" className="text-gray-700 hover:text-blue-600 font-medium">
-            Admin View
-          </Link>
+            <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
+              Admin View
+            </Link>
           )}
           {(role === 'teacher' || role === 'admin') && (
-          <Link href="teacher/" className="text-gray-700 hover:text-blue-600 font-medium">
-            Teacher View
-          </Link>
+            <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
+              Teacher View
+            </Link>
           )}
-          <Link href="guide/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>
           <button
@@ -79,30 +156,51 @@ export default function HomePage() {
           Please click on the subject area you wish to revise.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl w-full">
+        {/* Question Count Info */}
+        {quizzes.length > 0 && (
+          <div className="mb-6 text-sm text-gray-500">
+            Showing {quizzes.length} subject{quizzes.length !== 1 ? 's' : ''} with questions
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
           {/* Dynamic Quiz Cards */}
           {quizzes.map((quiz) => (
             <Card
               key={quiz.id}
-              className="hover:shadow-lg transition cursor-pointer"
-              onClick={() => router.push(`/quiz/${quiz.id}`)} // Uses UUID in URL
+              className="hover:shadow-lg transition cursor-pointer border-2 border-transparent hover:border-blue-200"
+              onClick={() => router.push(`/quiz/${quiz.id}`)}
             >
               <CardHeader>
-                <CardTitle className="text-lg">{quiz.title}</CardTitle>
+                <CardTitle className="text-lg flex justify-between items-start">
+                  <span>{quiz.title}</span>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    {quiz.form_questions?.length || 0} Qs
+                  </span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">
-                  {quiz.description}
+                <p className="text-gray-600 mb-3">
+                  {quiz.description || "No description available"}
                 </p>
+                <div className="text-xs text-gray-500">
+                  {quiz.form_questions?.length || 0} question{quiz.form_questions?.length !== 1 ? 's' : ''}
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
 
         {/* Fallback if no quizzes exist */}
-        {quizzes.length === 0 && (
+        {quizzes.length === 0 && !loading && (
           <div className="text-center text-gray-500 mt-8">
-            No subjects available at the moment.
+            <div className="text-lg mb-2">No subjects available yet</div>
+            <p className="text-sm mb-4">Check back later or contact your teacher to add subjects.</p>
+            {(role === 'teacher' || role === 'admin') && (
+              <Link href="/teacher" className="text-blue-600 hover:text-blue-800 underline">
+                Go to Teacher View to create subjects
+              </Link>
+            )}
           </div>
         )}
       </main>

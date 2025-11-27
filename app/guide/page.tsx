@@ -15,12 +15,12 @@ export default function HelpPage() {
         <div className="flex gap-6 items-center">
           {username ? `${username}` : "Guest"}
           {role === 'admin' && (
-          <Link href="admin/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
             Admin View
           </Link>
           )}
           {(role === 'teacher' || role === 'admin') && (
-          <Link href="teacher/" className="text-gray-700 hover:text-blue-600 font-medium">
+          <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
             Teacher View
           </Link>
           )}

@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-interface Question {
-  id: string;
+// Interface for the form data we send to the API
+interface QuestionInput {
   type: string;
   question: string;
   options: string[];
@@ -11,12 +11,47 @@ interface Question {
 }
 
 interface QuestionFormProps {
-  onFormSubmit?: (formData: { title: string; questions: Question[] }) => void;
+  onFormSubmit?: (formData: { title: string; questions: QuestionInput[]; description?: string }) => void;
+  initialData?: {
+    title: string;
+    description: string;
+    questions: any[];
+  };
+  isEditing?: boolean;
 }
 
-const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
+// Interface for local state management
+interface LocalQuestion {
+  id: string;
+  type: string;
+  question: string;
+  options: string[];
+  correctAnswer: string | string[];
+}
+
+const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, isEditing = false }) => {
   const [formTitle, setFormTitle] = useState('');
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [formDescription, setFormDescription] = useState('');
+  const [questions, setQuestions] = useState<LocalQuestion[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+  // Initialize form with initialData when in edit mode
+  useEffect(() => {
+    if (initialData) {
+      setFormTitle(initialData.title);
+      setFormDescription(initialData.description || '');
+      
+      // Convert initial data questions to LocalQuestion format
+      const convertedQuestions: LocalQuestion[] = initialData.questions.map((q, index) => ({
+        id: `question-${index}`,
+        type: q.type,
+        question: q.question,
+        options: q.options || [],
+        correctAnswer: q.correctAnswer || ''
+      }));
+      setQuestions(convertedQuestions);
+    }
+  }, [initialData]);
 
   const questionTypes = [
     { value: 'text', label: 'Short Text' },
@@ -28,7 +63,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
   ];
 
   const addQuestion = () => {
-    const newQuestion: Question = {
+    const newQuestion: LocalQuestion = {
       id: Date.now().toString(),
       type: 'text',
       question: '',
@@ -36,9 +71,10 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
       correctAnswer: ''
     };
     setQuestions([...questions, newQuestion]);
+    setCurrentQuestionIndex(questions.length); // Navigate to the new question
   };
 
-  const updateQuestion = (id: string, field: keyof Question, value: any) => {
+  const updateQuestion = (id: string, field: keyof LocalQuestion, value: any) => {
     setQuestions(questions.map(q => 
       q.id === id ? { ...q, [field]: value } : q
     ));
@@ -66,7 +102,13 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
   };
 
   const removeQuestion = (id: string) => {
-    setQuestions(questions.filter(q => q.id !== id));
+    const newQuestions = questions.filter(q => q.id !== id);
+    setQuestions(newQuestions);
+    
+    // Adjust current index if needed
+    if (currentQuestionIndex >= newQuestions.length) {
+      setCurrentQuestionIndex(Math.max(0, newQuestions.length - 1));
+    }
   };
 
   const removeOption = (questionId: string, optionIndex: number) => {
@@ -102,6 +144,24 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
       }
       return q;
     }));
+  };
+
+  const goToNextQuestion = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    }
+  };
+
+  const goToPreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+    }
+  };
+
+  const goToQuestion = (index: number) => {
+    if (index >= 0 && index < questions.length) {
+      setCurrentQuestionIndex(index);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -147,9 +207,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
       return;
     }
 
+    // Transform data for API - remove the id field and use the structure the API expects
     const formData = {
       title: formTitle,
-      questions: questions
+      description: formDescription,
+      questions: questions.map(q => ({
+        type: q.type,
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer
+      }))
     };
 
     try {
@@ -165,7 +232,9 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
         if (response.ok) {
           alert('Quiz created successfully!');
           setFormTitle('');
+          setFormDescription('');
           setQuestions([]);
+          setCurrentQuestionIndex(0);
         } else {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to save quiz');
@@ -177,7 +246,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
     }
   };
 
-  const renderQuestionOptions = (question: Question) => {
+  const renderQuestionOptions = (question: LocalQuestion) => {
     if (!['multiple-choice', 'checkbox', 'dropdown'].includes(question.type)) {
       return null;
     }
@@ -194,13 +263,15 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
               placeholder={`Option ${index + 1}`}
               className="flex-1 border p-2 rounded mr-2"
             />
-            <button
-              type="button"
-              onClick={() => removeOption(question.id, index)}
-              className="remove-option-btn bg-red-500 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-600"
-            >
-              ×
-            </button>
+            {question.options.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeOption(question.id, index)}
+                className="remove-option-btn bg-red-500 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-600"
+              >
+                ×
+              </button>
+            )}
           </div>
         ))}
         <button
@@ -214,7 +285,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
     );
   };
 
-  const renderCorrectAnswerField = (question: Question) => {
+  const renderCorrectAnswerField = (question: LocalQuestion) => {
     switch (question.type) {
       case 'text':
       case 'textarea':
@@ -306,9 +377,13 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
     }
   };
 
+  const currentQuestion = questions[currentQuestionIndex];
+
   return (
     <div className="form-container bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-center">Create Quiz Form</h2>
+      <h2 className="text-2xl font-bold mb-6 text-center">
+        {isEditing ? 'Edit Quiz' : 'Create Quiz Form'}
+      </h2>
       <form onSubmit={handleSubmit}>
         <div className="form-group mb-4">
           <label htmlFor="formTitle" className="block text-sm font-medium mb-2">
@@ -325,15 +400,78 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
           />
         </div>
 
+        <div className="form-group mb-4">
+          <label htmlFor="formDescription" className="block text-sm font-medium mb-2">
+            Quiz Description (Optional):
+          </label>
+          <textarea
+            id="formDescription"
+            value={formDescription}
+            onChange={(e) => setFormDescription(e.target.value)}
+            placeholder="Enter quiz description"
+            className="w-full border p-2 rounded"
+            rows={3}
+          />
+        </div>
+
+        {/* Question Navigation */}
+        {questions.length > 0 && (
+          <div className="navigation-section mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">
+                Question {currentQuestionIndex + 1} of {questions.length}
+              </h3>
+              
+              {/* Question Progress Dots */}
+              <div className="flex space-x-2">
+                {questions.map((_, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => goToQuestion(index)}
+                    className={`w-3 h-3 rounded-full transition-colors ${
+                      index === currentQuestionIndex 
+                        ? 'bg-blue-500' 
+                        : 'bg-gray-300 hover:bg-gray-400'
+                    }`}
+                    title={`Go to question ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex justify-between mb-4">
+              <button
+                type="button"
+                onClick={goToPreviousQuestion}
+                disabled={currentQuestionIndex === 0}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                ← Previous
+              </button>
+              
+              <button
+                type="button"
+                onClick={goToNextQuestion}
+                disabled={currentQuestionIndex === questions.length - 1}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Current Question Display */}
         <div className="questions-section mb-6">
-          <h3 className="text-xl font-semibold mb-4">Quiz Questions</h3>
-          {questions.map((question, index) => (
-            <div key={question.id} className="question-card border border-gray-200 rounded-lg p-4 mb-4 bg-white">
+          {currentQuestion ? (
+            <div key={currentQuestion.id} className="question-card border border-gray-200 rounded-lg p-4 mb-4 bg-white">
               <div className="question-header flex justify-between items-center mb-4 pb-2 border-b">
-                <h4 className="text-lg font-medium">Question {index + 1}</h4>
+                <h4 className="text-lg font-medium">Question {currentQuestionIndex + 1}</h4>
                 <button
                   type="button"
-                  onClick={() => removeQuestion(question.id)}
+                  onClick={() => removeQuestion(currentQuestion.id)}
                   className="remove-question-btn bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
                 >
                   Remove
@@ -344,8 +482,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
                 <div className="form-group">
                   <label className="block text-sm font-medium mb-2">Question Type:</label>
                   <select
-                    value={question.type}
-                    onChange={(e) => updateQuestion(question.id, 'type', e.target.value)}
+                    value={currentQuestion.type}
+                    onChange={(e) => updateQuestion(currentQuestion.id, 'type', e.target.value)}
                     className="w-full border p-2 rounded"
                   >
                     {questionTypes.map(type => (
@@ -360,19 +498,23 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
                   <label className="block text-sm font-medium mb-2">Question Text:</label>
                   <input
                     type="text"
-                    value={question.question}
-                    onChange={(e) => updateQuestion(question.id, 'question', e.target.value)}
+                    value={currentQuestion.question}
+                    onChange={(e) => updateQuestion(currentQuestion.id, 'question', e.target.value)}
                     placeholder="Enter your question"
                     className="w-full border p-2 rounded"
                     required
                   />
                 </div>
 
-                {renderQuestionOptions(question)}
-                {renderCorrectAnswerField(question)}
+                {renderQuestionOptions(currentQuestion)}
+                {renderCorrectAnswerField(currentQuestion)}
               </div>
             </div>
-          ))}
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No questions yet. Click "Add Question" to get started.
+            </div>
+          )}
         </div>
 
         <div className="form-actions flex justify-between">
@@ -381,14 +523,17 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit }) => {
             onClick={addQuestion}
             className="add-question-btn bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
-            Add Question
+            {questions.length === 0 ? 'Add First Question' : 'Add Another Question'}
           </button>
-          <button 
-            type="submit" 
-            className="submit-btn bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600"
-          >
-            Save Quiz
-          </button>
+          
+          {questions.length > 0 && (
+            <button 
+              type="submit" 
+              className="submit-btn bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600"
+            >
+              {isEditing ? 'Update Quiz' : 'Save Quiz'}
+            </button>
+          )}
         </div>
       </form>
     </div>
