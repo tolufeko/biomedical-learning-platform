@@ -18,10 +18,10 @@ export async function GET(
     }
 
     const { data, error } = await supabase
-      .from("custom_forms")
+      .from("quiz")
       .select(`
         *,
-        form_questions (
+        quiz_questions (
           id,
           question_type,
           question_text,
@@ -61,9 +61,9 @@ export async function DELETE(
       return NextResponse.json({ error: "Form ID is required" }, { status: 400 });
     }
 
-    // Delete will cascade to form_questions due to ON DELETE CASCADE
+    // Delete will cascade to quiz_questions due to ON DELETE CASCADE
     const { error } = await supabase
-      .from("custom_forms")
+      .from("quiz")
       .delete()
       .eq("id", id);
 

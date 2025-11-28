@@ -12,7 +12,7 @@ interface Quiz {
   id: string;
   title: string;
   description: string;
-  form_questions: any[]; // Add this to match your API response
+  quiz_questions: any[]; // Changed from form_questions
 }
 
 export default function HomePage() {
@@ -25,7 +25,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchQuizzes = async () => {
       try {
-        const response = await fetch('/api/custom-forms'); // Updated endpoint
+        const response = await fetch('/api/quizzes'); // Changed endpoint
         if (!response.ok) {
           throw new Error('Failed to fetch quizzes');
         }
@@ -156,13 +156,6 @@ export default function HomePage() {
           Please click on the subject area you wish to revise.
         </p>
 
-        {/* Question Count Info */}
-        {quizzes.length > 0 && (
-          <div className="mb-6 text-sm text-gray-500">
-            Showing {quizzes.length} subject{quizzes.length !== 1 ? 's' : ''} with questions
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
           {/* Dynamic Quiz Cards */}
           {quizzes.map((quiz) => (
@@ -175,7 +168,7 @@ export default function HomePage() {
                 <CardTitle className="text-lg flex justify-between items-start">
                   <span>{quiz.title}</span>
                   <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {quiz.form_questions?.length || 0} Qs
+                    {quiz.quiz_questions?.length || 0} Qs
                   </span>
                 </CardTitle>
               </CardHeader>
@@ -184,7 +177,7 @@ export default function HomePage() {
                   {quiz.description || "No description available"}
                 </p>
                 <div className="text-xs text-gray-500">
-                  {quiz.form_questions?.length || 0} question{quiz.form_questions?.length !== 1 ? 's' : ''}
+                  {quiz.quiz_questions?.length || 0} question{quiz.quiz_questions?.length !== 1 ? 's' : ''}
                 </div>
               </CardContent>
             </Card>

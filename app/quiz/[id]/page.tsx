@@ -10,11 +10,11 @@ interface QuizData {
   id: string;
   title: string;
   description?: string;
-  form_questions: any[];
+  quiz_questions: any[];
 }
 
 interface QuestionState {
-  userAnswer: string | null;
+  userAnswer: string | string[] | null;
   isSubmitted: boolean;
   isCorrect: boolean | null;
   showSolution: boolean;
@@ -31,8 +31,10 @@ export default function QuizPage() {
   const { username, role } = useAuth();
 
   // Filter only supported questions
-  const supportedQuestions = quizData?.form_questions?.filter(q => 
-    q.question_type === 'multiple-choice' || q.question_type === 'text'
+  const supportedQuestions = quizData?.quiz_questions?.filter(q => 
+    q.question_type === 'multiple-choice' || 
+    q.question_type === 'text' || 
+    q.question_type === 'checkbox'
   ) || [];
 
   const totalQuestions = supportedQuestions.length;
@@ -65,11 +67,11 @@ export default function QuizPage() {
 
   useEffect(() => {
     if (!id) return;
-
+  
     const fetchQuiz = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/custom-forms/${id}`);
+        const response = await fetch(`/api/quizzes/${id}`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch quiz');
@@ -85,17 +87,39 @@ export default function QuizPage() {
         setLoading(false);
       }
     };
-
+  
     fetchQuiz();
   }, [id]);
 
   const handleAnswerSelect = (answer: string) => {
-    if (currentQuestionState?.isSubmitted) return; // Prevent changes after submission
+    if (currentQuestionState?.isSubmitted) return;
     
     const newStates = [...questionStates];
     newStates[currentQuestionIndex] = {
       ...newStates[currentQuestionIndex],
       userAnswer: answer
+    };
+    setQuestionStates(newStates);
+  };
+
+  const handleCheckboxAnswerSelect = (option: string, checked: boolean) => {
+    if (currentQuestionState?.isSubmitted) return;
+    
+    const newStates = [...questionStates];
+    const currentAnswers = Array.isArray(currentQuestionState?.userAnswer) 
+      ? currentQuestionState.userAnswer 
+      : [];
+    
+    let newAnswers: string[];
+    if (checked) {
+      newAnswers = [...currentAnswers, option];
+    } else {
+      newAnswers = currentAnswers.filter(answer => answer !== option);
+    }
+    
+    newStates[currentQuestionIndex] = {
+      ...newStates[currentQuestionIndex],
+      userAnswer: newAnswers
     };
     setQuestionStates(newStates);
   };
@@ -115,14 +139,30 @@ export default function QuizPage() {
     if (!currentQuestion || !currentQuestionState?.userAnswer) return;
     
     const newStates = [...questionStates];
-    const isCorrect = currentQuestionState.userAnswer.toLowerCase().trim() === 
-                     currentQuestion.correct_answer.toLowerCase().trim();
+    let isCorrect = false;
+    
+    if (currentQuestion.question_type === 'checkbox') {
+      // For checkbox questions, compare arrays
+      const userAnswers = Array.isArray(currentQuestionState.userAnswer) 
+        ? currentQuestionState.userAnswer.sort() 
+        : [];
+      const correctAnswers = Array.isArray(currentQuestion.correct_answer) 
+        ? currentQuestion.correct_answer.sort() 
+        : [];
+      
+      isCorrect = userAnswers.length === correctAnswers.length && 
+                  userAnswers.every((answer, index) => answer === correctAnswers[index]);
+    } else {
+      // For other question types (text, multiple-choice)
+      isCorrect = currentQuestionState.userAnswer.toString().toLowerCase().trim() === 
+                  currentQuestion.correct_answer.toString().toLowerCase().trim();
+    }
     
     newStates[currentQuestionIndex] = {
       ...newStates[currentQuestionIndex],
       isSubmitted: true,
       isCorrect,
-      showSolution: false // Reset showSolution on new submission
+      showSolution: false
     };
     setQuestionStates(newStates);
   };
@@ -292,6 +332,13 @@ export default function QuizPage() {
               <div className="mt-4 space-y-4">
                 {supportedQuestions.map((question, index) => {
                   const state = questionStates[index];
+                  const userAnswer = Array.isArray(state?.userAnswer) 
+                    ? state.userAnswer.join(', ') 
+                    : state?.userAnswer;
+                  const correctAnswer = Array.isArray(question.correct_answer)
+                    ? question.correct_answer.join(', ')
+                    : question.correct_answer;
+                  
                   return (
                     <div key={index} className="p-4 border rounded-lg bg-gray-50">
                       <div className="flex items-start gap-3 mb-2">
@@ -304,11 +351,11 @@ export default function QuizPage() {
                           <p className="font-medium">Question {index + 1}: {question.question_text}</p>
                           <p className="text-sm text-gray-600 mt-1">
                             Your answer: <span className={state?.isCorrect ? 'text-green-600' : 'text-red-600'}>
-                              {state?.userAnswer || 'No answer'}
+                              {userAnswer || 'No answer'}
                             </span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Correct answer: {question.correct_answer}
+                            Correct answer: {correctAnswer}
                           </p>
                         </div>
                       </div>
@@ -407,7 +454,9 @@ export default function QuizPage() {
                   {currentQuestion.question_text}
                 </h3>
                 <div className="text-sm text-gray-500">
-                  Type: {currentQuestion.question_type}
+                  Type: {currentQuestion.question_type === 'checkbox' ? 'Multiple Select' : 
+                         currentQuestion.question_type === 'multiple-choice' ? 'Multiple Choice' : 
+                         currentQuestion.question_type}
                 </div>
               </div>
 
@@ -463,6 +512,55 @@ export default function QuizPage() {
                 </div>
               )}
 
+              {/* Checkbox Question */}
+              {currentQuestion.question_type === 'checkbox' && (
+                <div className="space-y-3 mb-6">
+                  {currentQuestion.options.map((option: string, index: number) => {
+                    const isUserAnswer = Array.isArray(currentQuestionState?.userAnswer) && 
+                                        currentQuestionState.userAnswer.includes(option);
+                    const isCorrectAnswer = Array.isArray(currentQuestion.correct_answer) && 
+                                           currentQuestion.correct_answer.includes(option);
+                    const showCorrectAnswer = currentQuestionState?.showSolution;
+                    
+                    return (
+                      <label
+                        key={index}
+                        className={`flex items-center p-4 rounded-lg border transition-colors cursor-pointer ${
+                          currentQuestionState?.isSubmitted
+                            ? isUserAnswer
+                              ? isCorrectAnswer
+                                ? 'bg-green-100 border-green-500 text-green-800'
+                                : 'bg-red-100 border-red-500 text-red-800'
+                              : showCorrectAnswer && isCorrectAnswer
+                              ? 'bg-green-100 border-green-500 text-green-800'
+                              : 'bg-gray-50 border-gray-300'
+                            : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
+                        } ${currentQuestionState?.isSubmitted ? 'cursor-default' : 'cursor-pointer'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Array.isArray(currentQuestionState?.userAnswer) && 
+                                  currentQuestionState.userAnswer.includes(option)}
+                          onChange={(e) => {
+                            if (currentQuestionState?.isSubmitted) return;
+                            handleCheckboxAnswerSelect(option, e.target.checked);
+                          }}
+                          disabled={currentQuestionState?.isSubmitted}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <span className="ml-3 flex-1">{option}</span>
+                        {showCorrectAnswer && isCorrectAnswer && (
+                          <span className="ml-auto text-green-600 font-medium">Correct</span>
+                        )}
+                        {currentQuestionState?.isSubmitted && isUserAnswer && !isCorrectAnswer && (
+                          <span className="ml-auto text-red-600 font-medium">Incorrect</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Text Question */}
               {currentQuestion.question_type === 'text' && (
                 <div className="mb-6">
@@ -510,42 +608,6 @@ export default function QuizPage() {
                   )}
                 </div>
               )}
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 flex-wrap">
-                {!currentQuestionState?.isSubmitted ? (
-                  <button
-                    onClick={submitAnswer}
-                    disabled={!currentQuestionState?.userAnswer}
-                    className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                      currentQuestionState?.userAnswer
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    Check Answer
-                  </button>
-                ) : (
-                  <>
-                    {!currentQuestionState.showSolution && (
-                      <button
-                        onClick={retryQuestion}
-                        className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
-                      >
-                        Retry
-                      </button>
-                    )}
-                    {!currentQuestionState.isCorrect && !currentQuestionState.showSolution && (
-                      <button
-                        onClick={showSolution}
-                        className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
-                      >
-                        Show Solution
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
             </div>
           ) : (
             <div className="text-center text-gray-500 py-8 bg-white rounded-lg border">
@@ -554,7 +616,7 @@ export default function QuizPage() {
           )}
         </div>
 
-        {/* Navigation Buttons */}
+        {/* Navigation Buttons - Only show Previous/Next, no Finish button here */}
         {totalQuestions > 1 && (
           <div className="flex justify-between w-full max-w-4xl gap-4">
             <button
@@ -569,38 +631,73 @@ export default function QuizPage() {
               ← Previous
             </button>
 
-            {isLastQuestion ? (
+            <button
+              onClick={goToNextQuestion}
+              disabled={isLastQuestion}
+              className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                isLastQuestion
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              Next →
+            </button>
+          </div>
+        )}
+        
+        {/* Action Buttons */}
+        <div className="flex gap-3 flex-wrap">
+          {!currentQuestionState?.isSubmitted ? (
+            <>
+              <button
+                onClick={submitAnswer}
+                disabled={!currentQuestionState?.userAnswer || 
+                        (Array.isArray(currentQuestionState.userAnswer) && 
+                          currentQuestionState.userAnswer.length === 0)}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  currentQuestionState?.userAnswer && 
+                  (!Array.isArray(currentQuestionState.userAnswer) || 
+                  currentQuestionState.userAnswer.length > 0)
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Check Answer
+              </button>
               <button
                 onClick={finishQuiz}
                 className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
               >
                 Finish Quiz
               </button>
-            ) : (
+            </>
+          ) : (
+            <>
+              {!currentQuestionState.showSolution && (
+                <button
+                  onClick={retryQuestion}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                >
+                  Retry
+                </button>
+              )}
+              {!currentQuestionState.isCorrect && !currentQuestionState.showSolution && (
+                <button
+                  onClick={showSolution}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                >
+                  Show Solution
+                </button>
+              )}
               <button
-                onClick={goToNextQuestion}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                onClick={finishQuiz}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
               >
-                Next →
+                Finish Quiz
               </button>
-            )}
-          </div>
-        )}
-
-        {/* Single question finish button */}
-        {totalQuestions === 1 && (
-          <button
-            onClick={finishQuiz}
-            disabled={!currentQuestionState?.isSubmitted}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              currentQuestionState?.isSubmitted
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            Finish Quiz
-          </button>
-        )}
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

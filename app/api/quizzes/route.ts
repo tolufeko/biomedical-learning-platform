@@ -9,10 +9,10 @@ const supabase = createClient(
 export async function GET() {
   try {
     const { data: forms, error } = await supabase
-      .from("custom_forms")
+      .from("quiz")
       .select(`
         *,
-        form_questions (
+        quiz_questions (
           id,
           question_type,
           question_text,
@@ -39,9 +39,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const formData = await request.json();
-    const { title, questions, description } = formData;
+    const { title, questions, description, userId } = formData; // Add userId to destructuring
 
-    console.log("Received form data:", { title, questionsCount: questions?.length, description });
+    console.log("Received form data:", { title, questionsCount: questions?.length, description, userId });
 
     if (!title || !questions) {
       return NextResponse.json(
@@ -50,15 +50,22 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      );
+    }
+
     // Create the form first
     const { data: form, error: formError } = await supabase
-      .from("custom_forms")
+      .from("quiz")
       .insert([
         {
           title,
           description: description || null,
-          questions: [], // Empty array for legacy column
-          question_ids: [], // Will be updated after creating questions
+          question_ids: [],
+          user_id: userId, // Add user_id here
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -76,7 +83,7 @@ export async function POST(request: Request) {
 
     console.log("Form created:", form.id);
 
-    // Insert questions into form_questions table
+    // Insert questions into quiz_questions table
     const formQuestions = questions.map((q: any, index: number) => ({
       form_id: form.id,
       question_type: q.type,
@@ -84,20 +91,19 @@ export async function POST(request: Request) {
       options: q.options,
       correct_answer: q.correctAnswer,
       display_order: index,
-      created_at: new Date().toISOString()
     }));
 
     console.log("Inserting questions:", formQuestions);
 
     const { data: insertedQuestions, error: questionsError } = await supabase
-      .from("form_questions")
+      .from("quiz_questions")
       .insert(formQuestions)
       .select('id');
 
     if (questionsError) {
       console.error("Supabase questions insertion error:", questionsError);
       // Clean up: delete the form if questions fail
-      await supabase.from("custom_forms").delete().eq("id", form.id);
+      await supabase.from("quiz").delete().eq("id", form.id);
       return NextResponse.json({ 
         error: `Failed to create questions: ${questionsError.message}`,
         details: questionsError 
@@ -109,7 +115,7 @@ export async function POST(request: Request) {
     // Update the form with question IDs
     const questionIds = insertedQuestions.map(q => q.id);
     const { error: updateError } = await supabase
-      .from("custom_forms")
+      .from("quiz")
       .update({ 
         question_ids: questionIds,
         updated_at: new Date().toISOString()
@@ -126,10 +132,10 @@ export async function POST(request: Request) {
 
     // Fetch the complete form with questions
     const { data: completeForm, error: completeError } = await supabase
-      .from("custom_forms")
+      .from("quiz")
       .select(`
         *,
-        form_questions (
+        quiz_questions (
           id,
           question_type,
           question_text,

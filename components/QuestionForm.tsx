@@ -54,12 +54,9 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   }, [initialData]);
 
   const questionTypes = [
-    { value: 'text', label: 'Short Text' },
-    { value: 'textarea', label: 'Long Text' },
+    { value: 'text', label: 'Text' },
     { value: 'multiple-choice', label: 'Multiple Choice' },
-    { value: 'checkbox', label: 'Checkbox' },
-    { value: 'dropdown', label: 'Dropdown' },
-    { value: 'rating', label: 'Rating' }
+    { value: 'checkbox', label: 'Checkbox' }
   ];
 
   const addQuestion = () => {
@@ -194,9 +191,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         case 'checkbox':
           return !Array.isArray(q.correctAnswer) || q.correctAnswer.length === 0;
         
-        case 'rating':
-          return !q.correctAnswer || isNaN(Number(q.correctAnswer));
-        
         default:
           return true;
       }
@@ -207,7 +201,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       return;
     }
 
-    // Transform data for API - remove the id field and use the structure the API expects
     const formData = {
       title: formTitle,
       description: formDescription,
@@ -223,7 +216,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       if (onFormSubmit) {
         onFormSubmit(formData);
       } else {
-        const response = await fetch('/api/custom-forms', {
+        const response = await fetch('/api/quizzes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -306,27 +299,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         );
 
       case 'multiple-choice':
-      case 'dropdown':
-        return (
-          <div className="form-group mt-3">
-            <label className="block text-sm font-medium mb-2">
-              Select Correct Answer:
-            </label>
-            <select
-              value={question.correctAnswer as string}
-              onChange={(e) => handleCorrectAnswerChange(question.id, e.target.value)}
-              className="w-full border p-2 rounded"
-              required
-            >
-              <option value="">Choose correct option</option>
-              {question.options.map((option, index) => (
-                <option key={index} value={option}>
-                  {option || `Option ${index + 1}`}
-                </option>
-              ))}
-            </select>
-          </div>
-        );
 
       case 'checkbox':
         return (
@@ -347,28 +319,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                 </label>
               ))}
             </div>
-          </div>
-        );
-
-      case 'rating':
-        return (
-          <div className="form-group mt-3">
-            <label className="block text-sm font-medium mb-2">
-              Correct Rating (1-5):
-            </label>
-            <select
-              value={question.correctAnswer as string}
-              onChange={(e) => handleCorrectAnswerChange(question.id, e.target.value)}
-              className="w-full border p-2 rounded"
-              required
-            >
-              <option value="">Select rating</option>
-              {[1, 2, 3, 4, 5].map((rating) => (
-                <option key={rating} value={rating.toString()}>
-                  {rating} {rating === 1 ? 'star' : 'stars'}
-                </option>
-              ))}
-            </select>
           </div>
         );
 

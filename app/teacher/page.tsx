@@ -8,7 +8,7 @@ import { signOut } from "@/public/lib/utils";
 import { useAuth } from "@/public/lib/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
 
-interface FormQuestion {
+interface QuizQuestion { // Changed from FormQuestion
   id: string;
   question_type: string;
   question_text: string;
@@ -17,29 +17,29 @@ interface FormQuestion {
   display_order: number;
 }
 
-interface CustomForm {
+interface Quiz { // Changed from CustomForm
   id: string;
   title: string;
   description?: string;
-  question_ids: string[]; // Array of question IDs
-  questions?: any[]; // For backward compatibility
-  form_questions: FormQuestion[]; // Full question data from join
+  question_ids: string[];
+  questions?: any[];
+  quiz_questions: QuizQuestion[]; // Changed from form_questions
   created_at: string;
   updated_at: string;
   user_id: string;
 }
 
 export default function AdminPage() {
-  const [customForms, setCustomForms] = useState<CustomForm[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]); // Changed from CustomForm[]
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const { username, role, user } = useAuth();
   const [formSearchTerm, setFormSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [formsLoading, setFormsLoading] = useState(false);
-  const [editingForm, setEditingForm] = useState<CustomForm | null>(null);
+  const [editingForm, setEditingForm] = useState<Quiz | null>(null); // Changed from CustomForm
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [resetFormKey, setResetFormKey] = useState(0); // Key to reset the QuestionForm
+  const [resetFormKey, setResetFormKey] = useState(0);
   const router = useRouter();
 
   // Check if user is teacher or admin
@@ -50,7 +50,6 @@ export default function AdminPage() {
         return;
       }
 
-      // Allow access only for teachers and admins
       if (role !== 'teacher' && role !== 'admin') {
         router.push("/home");
         return;
@@ -73,21 +72,21 @@ export default function AdminPage() {
     }
   }, [error, success]);
 
-  // Fetch custom forms
-  const fetchCustomForms = async () => {
+  // Fetch quizzes
+  const fetchQuizzes = async () => {
     setFormsLoading(true);
     try {
-      const res = await fetch('/api/custom-forms');
+      const res = await fetch('/api/quizzes'); // Changed endpoint
       if (res.ok) {
         const data = await res.json();
-        setCustomForms(data || []);
+        setQuizzes(data || []);
       } else {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to fetch forms');
+        throw new Error(errorData.error || 'Failed to fetch quizzes');
       }
     } catch (err) {
-      console.error('Failed to fetch custom forms:', err);
-      setError('Failed to load custom forms');
+      console.error('Failed to fetch quizzes:', err);
+      setError('Failed to load quizzes');
     } finally {
       setFormsLoading(false);
     }
@@ -95,42 +94,43 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (role === 'teacher' || role === 'admin') {
-      fetchCustomForms();
+      fetchQuizzes();
     }
   }, [role]);
 
-  // Handle custom form submission
+  // Handle quiz submission
   const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string }) => {
     try {
-      const response = await fetch('/api/custom-forms', {
+      const response = await fetch('/api/quizzes', { // Changed endpoint
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          userId: user?.id
+        }),
       });
 
       const result = await response.json();
 
       if (response.ok) {
         setSuccess('Quiz created successfully!');
-        setCustomForms(prevForms => [result, ...prevForms]);
-        // Reset the create form by changing the key
+        setQuizzes(prevQuizzes => [result, ...prevQuizzes]);
         setResetFormKey(prev => prev + 1);
       } else {
         throw new Error(result.error || 'Failed to create quiz');
       }
     } catch (error) {
-      console.error('Error saving custom form:', error);
+      console.error('Error saving quiz:', error);
       setError(`Failed to create quiz: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Handle form update
+  // Handle quiz update
   const handleFormUpdate = async (formData: { title: string; questions: any[]; description?: string }) => {
     if (!editingForm) return;
 
     try {
-      // First, delete the existing form and its questions
-      const deleteResponse = await fetch(`/api/custom-forms/${editingForm.id}`, {
+      const deleteResponse = await fetch(`/api/quizzes/${editingForm.id}`, { // Changed endpoint
         method: 'DELETE',
       });
 
@@ -138,39 +138,39 @@ export default function AdminPage() {
         throw new Error('Failed to delete existing quiz');
       }
 
-      // Then create a new form with the updated data
-      const createResponse = await fetch('/api/custom-forms', {
+      const createResponse = await fetch('/api/quizzes', { // Changed endpoint
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          userId: user?.id
+        }),
       });
 
       const result = await createResponse.json();
 
       if (createResponse.ok) {
         setSuccess('Quiz updated successfully!');
-        // Refresh the forms list
-        fetchCustomForms();
-        // Close the edit modal
+        fetchQuizzes();
         setEditingForm(null);
         setIsEditModalOpen(false);
       } else {
         throw new Error(result.error || 'Failed to update quiz');
       }
     } catch (error) {
-      console.error('Error updating custom form:', error);
+      console.error('Error updating quiz:', error);
       setError(`Failed to update quiz: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Delete custom form
-  const handleDeleteForm = async (formId: string, formTitle: string) => {
-    if (!confirm(`Are you sure you want to delete "${formTitle}"?`)) return;
+  // Delete quiz
+  const handleDeleteQuiz = async (quizId: string, quizTitle: string) => {
+    if (!confirm(`Are you sure you want to delete "${quizTitle}"?`)) return;
 
     setError(null);
 
     try {
-      const res = await fetch(`/api/custom-forms/${formId}`, { 
+      const res = await fetch(`/api/quizzes/${quizId}`, { // Changed endpoint
         method: 'DELETE' 
       });
       
@@ -181,16 +181,16 @@ export default function AdminPage() {
       }
       
       setSuccess('Quiz deleted successfully!');
-      fetchCustomForms();
+      fetchQuizzes();
     } catch (err) {
       console.error('Delete error:', err);
       setError(`Failed to delete quiz: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
-  // Start editing a form
-  const handleEditForm = (form: CustomForm) => {
-    setEditingForm(form);
+  // Start editing a quiz
+  const handleEditQuiz = (quiz: Quiz) => {
+    setEditingForm(quiz);
     setIsEditModalOpen(true);
   };
 
@@ -200,8 +200,8 @@ export default function AdminPage() {
     setIsEditModalOpen(false);
   };
 
-  // Convert form questions to the format expected by QuestionForm
-  const convertFormQuestions = (questions: FormQuestion[]) => {
+  // Convert quiz questions to the format expected by QuestionForm
+  const convertQuizQuestions = (questions: QuizQuestion[]) => {
     return questions.map(q => ({
       type: q.question_type,
       question: q.question_text,
@@ -219,7 +219,6 @@ export default function AdminPage() {
     );
   }
 
-  // If user doesn't have access, don't render the page
   if (role !== 'teacher' && role !== 'admin') {
     return null;
   }
@@ -286,26 +285,26 @@ export default function AdminPage() {
           <p className="text-gray-600">Create and manage quizzes with automatic grading</p>
         </div>
 
-        {/* Create Custom Form */}
+        {/* Create Quiz Form */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="text-2xl">Create New Quiz</CardTitle>
           </CardHeader>
           <CardContent>
             <QuestionForm 
-              key={resetFormKey} // This will reset the form when key changes
+              key={resetFormKey}
               onFormSubmit={handleFormSubmit} 
             />
           </CardContent>
         </Card>
 
-        {/* Custom Forms List */}
+        {/* Quizzes List */}
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">Your Quizzes</CardTitle>
           </CardHeader>
           <CardContent>
-            {/* Search Bar for Forms */}
+            {/* Search Bar */}
             <div className="mb-6">
               <input
                 type="text"
@@ -323,39 +322,39 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* List of custom forms */}
+            {/* List of quizzes */}
             {!formsLoading && (
               <div className="space-y-4">
-                {customForms
-                  .filter(form => 
-                    form.title.toLowerCase().includes(formSearchTerm.toLowerCase())
+                {quizzes
+                  .filter(quiz => 
+                    quiz.title.toLowerCase().includes(formSearchTerm.toLowerCase())
                   )
-                  .map((form) => (
+                  .map((quiz) => (
                     <div
-                      key={form.id}
+                      key={quiz.id}
                       className="p-6 border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow"
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h3 className="text-xl font-semibold text-gray-900 mb-2">{form.title}</h3>
-                          {form.description && (
-                            <p className="text-gray-600 mb-3">{form.description}</p>
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2">{quiz.title}</h3>
+                          {quiz.description && (
+                            <p className="text-gray-600 mb-3">{quiz.description}</p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
                             <span>
-                              {form.form_questions?.length || 0} question{form.form_questions?.length !== 1 ? 's' : ''}
+                              {quiz.quiz_questions?.length || 0} question{quiz.quiz_questions?.length !== 1 ? 's' : ''}
                             </span>
                             <span>•</span>
                             <span>
-                              Created: {new Date(form.created_at).toLocaleDateString()}
+                              Created: {new Date(quiz.created_at).toLocaleDateString()}
                             </span>
                             <span>•</span>
                             <span>
-                              Updated: {new Date(form.updated_at).toLocaleDateString()}
+                              Updated: {new Date(quiz.updated_at).toLocaleDateString()}
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {form.form_questions?.slice(0, 5).map((q: FormQuestion, idx: number) => (
+                            {quiz.quiz_questions?.slice(0, 5).map((q: QuizQuestion, idx: number) => (
                               <span 
                                 key={q.id} 
                                 className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded capitalize"
@@ -363,29 +362,29 @@ export default function AdminPage() {
                                 {q.question_type?.replace('-', ' ') || 'unknown'}
                               </span>
                             ))}
-                            {form.form_questions?.length > 5 && (
+                            {quiz.quiz_questions?.length > 5 && (
                               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                                +{form.form_questions.length - 5} more
+                                +{quiz.quiz_questions.length - 5} more
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="flex gap-2 ml-6">
                           <Link 
-                            href={`/quiz/${form.id}`}
+                            href={`/quiz/${quiz.id}`}
                             className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-center"
                           >
                             View
                           </Link>
                           <button
                             className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
-                            onClick={() => handleEditForm(form)}
+                            onClick={() => handleEditQuiz(quiz)}
                           >
                             Edit
                           </button>
                           <button
                             className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                            onClick={() => handleDeleteForm(form.id, form.title)}
+                            onClick={() => handleDeleteQuiz(quiz.id, quiz.title)}
                           >
                             Delete
                           </button>
@@ -397,8 +396,8 @@ export default function AdminPage() {
             )}
             
             {/* Empty States */}
-            {!formsLoading && customForms.filter(form => 
-              form.title.toLowerCase().includes(formSearchTerm.toLowerCase())
+            {!formsLoading && quizzes.filter(quiz => 
+              quiz.title.toLowerCase().includes(formSearchTerm.toLowerCase())
             ).length === 0 && formSearchTerm && (
               <div className="text-center text-gray-500 py-12">
                 <div className="text-lg mb-2">No quizzes found</div>
@@ -406,7 +405,7 @@ export default function AdminPage() {
               </div>
             )}
 
-            {!formsLoading && customForms.length === 0 && !formSearchTerm && (
+            {!formsLoading && quizzes.length === 0 && !formSearchTerm && (
               <div className="text-center text-gray-500 py-12">
                 <div className="text-lg mb-2">No quizzes created yet</div>
                 <p className="text-sm">Create your first quiz using the quiz builder above!</p>
@@ -435,7 +434,7 @@ export default function AdminPage() {
                 initialData={{
                   title: editingForm.title,
                   description: editingForm.description || '',
-                  questions: convertFormQuestions(editingForm.form_questions)
+                  questions: convertQuizQuestions(editingForm.quiz_questions)
                 }}
                 isEditing={true}
               />

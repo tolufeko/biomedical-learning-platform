@@ -23,7 +23,8 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [updating, setUpdating] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const { username, role } = useAuth();
+  const { username, role, user } = useAuth();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     checkAdminAccess();
@@ -36,14 +37,17 @@ export default function AdminDashboard() {
   }, [userRole]);
 
   useEffect(() => {
-    const filtered = users.filter(user =>
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Filter out the current admin user from the list
+    const filtered = users
+      .filter(user => user.id !== currentUserId) // Exclude current user
+      .filter(user =>
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.id.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     setFilteredUsers(filtered);
-  }, [searchTerm, users]);
+  }, [searchTerm, users, currentUserId]);
 
   const checkAdminAccess = async () => {
     try {
@@ -53,6 +57,9 @@ export default function AdminDashboard() {
         router.push("/");
         return;
       }
+
+      // Store the current user ID
+      setCurrentUserId(user.id);
 
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -84,7 +91,6 @@ export default function AdminDashboard() {
     try {
       setMessage("");
       
-      // Only select columns that exist in your table
       const { data: profiles, error } = await supabase
         .from("profiles")
         .select("id, username, email, role")
@@ -97,7 +103,6 @@ export default function AdminDashboard() {
       }
 
       setUsers(profiles || []);
-      setFilteredUsers(profiles || []);
     } catch (error: any) {
       console.error("Error fetching users:", error);
       setMessage(`Error: ${error.message}`);
@@ -179,105 +184,100 @@ export default function AdminDashboard() {
         </div>
       </nav>
       
-        {/* User Management Section */}
-        <div className="p-6 bg-white rounded-lg shadow-md mt-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">User Management</h2>
-          
-          {/* Search and Refresh */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <input
-              type="text"
-              placeholder="Search by username, email, role, or user ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={fetchUsers}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
-            >
-              Refresh Users
-            </button>
+      {/* User Management Section */}
+      <div className="p-6 bg-white rounded-lg shadow-md mt-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">User Management</h2>
+
+        {/* Search and Refresh */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <input
+            type="text"
+            placeholder="Search by username, email, role, or user ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={fetchUsers}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Refresh Users
+          </button>
+        </div>
+
+        {/* Message */}
+        {message && (
+          <div className={`mb-4 p-3 rounded-lg ${
+            message.includes("Error") ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+          }`}>
+            {message}
           </div>
+        )}
 
-          {/* Message */}
-          {message && (
-            <div className={`mb-4 p-3 rounded-lg ${
-              message.includes("Error") ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-            }`}>
-              {message}
-            </div>
-          )}
-
-          {/* Users Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-200">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-200 p-3 text-left font-semibold">Username</th>
-                  <th className="border border-gray-200 p-3 text-left font-semibold">Email</th>
-                  <th className="border border-gray-200 p-3 text-left font-semibold">Current Role</th>
-                  <th className="border border-gray-200 p-3 text-left font-semibold">Change Role</th>
-                  <th className="border border-gray-200 p-3 text-left font-semibold">User ID</th>
+        {/* Users Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse border border-gray-200">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="border border-gray-200 p-3 text-left font-semibold">Username</th>
+                <th className="border border-gray-200 p-3 text-left font-semibold">Email</th>
+                <th className="border border-gray-200 p-3 text-left font-semibold">Current Role</th>
+                <th className="border border-gray-200 p-3 text-left font-semibold">Change Role</th>
+                <th className="border border-gray-200 p-3 text-left font-semibold">User ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="border border-gray-200 p-3 text-center text-gray-500">
+                    {users.length === 0 ? "No users found in database" : "No users match your search"}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="border border-gray-200 p-3 text-center text-gray-500">
-                      {users.length === 0 ? "No users found in database" : "No users match your search"}
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="border border-gray-200 p-3 font-medium">
+                      {user.username}
+                    </td>
+                    <td className="border border-gray-200 p-3">
+                      {user.email || "No email"}
+                    </td>
+                    <td className="border border-gray-200 p-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        user.role === 'admin' 
+                          ? 'bg-purple-100 text-purple-800'
+                          : user.role === 'teacher'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="border border-gray-200 p-3">
+                      <select
+                        value={user.role}
+                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                        disabled={updating === user.id}
+                        className="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      >
+                        <option value="student">Student</option>
+                        <option value="teacher">Teacher</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      {updating === user.id && (
+                        <span className="ml-2 text-sm text-gray-500">Updating...</span>
+                      )}
+                    </td>
+                    <td className="border border-gray-200 p-3 text-sm text-gray-600 font-mono">
+                      {user.id.substring(0, 8)}...
                     </td>
                   </tr>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="border border-gray-200 p-3 font-medium">
-                        {user.username}
-                      </td>
-                      <td className="border border-gray-200 p-3">
-                        {user.email || "No email"}
-                      </td>
-                      <td className="border border-gray-200 p-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          user.role === 'admin' 
-                            ? 'bg-purple-100 text-purple-800'
-                            : user.role === 'teacher'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="border border-gray-200 p-3">
-                        <select
-                          value={user.role}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                          disabled={updating === user.id}
-                          className="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                        >
-                          <option value="student">Student</option>
-                          <option value="teacher">Teacher</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                        {updating === user.id && (
-                          <span className="ml-2 text-sm text-gray-500">Updating...</span>
-                        )}
-                      </td>
-                      <td className="border border-gray-200 p-3 text-sm text-gray-600 font-mono">
-                        {user.id.substring(0, 8)}...
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Summary */}
-          <div className="mt-4 text-sm text-gray-600">
-            Showing {filteredUsers.length} of {users.length} users
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
+    </div>
   );
 }
