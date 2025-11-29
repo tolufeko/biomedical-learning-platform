@@ -95,9 +95,24 @@ export default function QuizPage() {
     if (currentQuestionState?.isSubmitted) return;
     
     const newStates = [...questionStates];
+    const currentAnswers = Array.isArray(currentQuestionState?.userAnswer) 
+      ? currentQuestionState.userAnswer 
+      : currentQuestionState?.userAnswer 
+        ? [currentQuestionState.userAnswer] 
+        : [];
+    
+    let newAnswers: string[];
+    if (currentAnswers.includes(answer)) {
+      // Deselect if already selected
+      newAnswers = currentAnswers.filter(a => a !== answer);
+    } else {
+      // Select new answer
+      newAnswers = [...currentAnswers, answer];
+    }
+    
     newStates[currentQuestionIndex] = {
       ...newStates[currentQuestionIndex],
-      userAnswer: answer
+      userAnswer: newAnswers
     };
     setQuestionStates(newStates);
   };
@@ -141,19 +156,19 @@ export default function QuizPage() {
     const newStates = [...questionStates];
     let isCorrect = false;
     
-    if (currentQuestion.question_type === 'checkbox') {
-      // For checkbox questions, compare arrays
+    if (currentQuestion.question_type === 'checkbox' || currentQuestion.question_type === 'multiple-choice') {
+      // For both checkbox and multiple-choice questions, compare arrays
       const userAnswers = Array.isArray(currentQuestionState.userAnswer) 
         ? currentQuestionState.userAnswer.sort() 
-        : [];
+        : [currentQuestionState.userAnswer].sort();
       const correctAnswers = Array.isArray(currentQuestion.correct_answer) 
         ? currentQuestion.correct_answer.sort() 
-        : [];
+        : [currentQuestion.correct_answer].sort();
       
       isCorrect = userAnswers.length === correctAnswers.length && 
                   userAnswers.every((answer, index) => answer === correctAnswers[index]);
     } else {
-      // For other question types (text, multiple-choice)
+      // For text questions
       isCorrect = currentQuestionState.userAnswer.toString().toLowerCase().trim() === 
                   currentQuestion.correct_answer.toString().toLowerCase().trim();
     }
@@ -453,60 +468,53 @@ export default function QuizPage() {
                 <h3 className="text-xl font-semibold text-gray-800 mb-4">
                   {currentQuestion.question_text}
                 </h3>
-                <div className="text-sm text-gray-500">
-                  Type: {currentQuestion.question_type === 'checkbox' ? 'Multiple Select' : 
-                         currentQuestion.question_type === 'multiple-choice' ? 'Multiple Choice' : 
-                         currentQuestion.question_type}
-                </div>
               </div>
 
-              {/* Multiple Choice Question */}
+              {/* Multiple Choice Question - Now allows multiple selection */}
               {currentQuestion.question_type === 'multiple-choice' && (
                 <div className="space-y-3 mb-6">
                   {currentQuestion.options.map((option: string, index: number) => {
-                    const isUserAnswer = currentQuestionState?.userAnswer === option;
-                    const isCorrectAnswer = option === currentQuestion.correct_answer;
+                    const isUserAnswer = Array.isArray(currentQuestionState?.userAnswer) 
+                      ? currentQuestionState.userAnswer.includes(option)
+                      : currentQuestionState?.userAnswer === option;
+                    const isCorrectAnswer = Array.isArray(currentQuestion.correct_answer)
+                      ? currentQuestion.correct_answer.includes(option)
+                      : currentQuestion.correct_answer === option;
                     const showCorrectAnswer = currentQuestionState?.showSolution;
                     
                     return (
-                      <button
+                      <label
                         key={index}
-                        onClick={() => handleAnswerSelect(option)}
-                        disabled={currentQuestionState?.isSubmitted}
-                        className={`w-full text-left p-4 rounded-lg border transition-colors ${
-                          isUserAnswer
-                            ? currentQuestionState?.isSubmitted
-                              ? currentQuestionState?.isCorrect
+                        className={`flex items-center p-4 rounded-lg border transition-colors cursor-pointer ${
+                          currentQuestionState?.isSubmitted
+                            ? isUserAnswer
+                              ? isCorrectAnswer
                                 ? 'bg-green-100 border-green-500 text-green-800'
                                 : 'bg-red-100 border-red-500 text-red-800'
-                              : 'bg-blue-100 border-blue-500 text-blue-800'
-                            : showCorrectAnswer && isCorrectAnswer
-                            ? 'bg-green-100 border-green-500 text-green-800'
+                              : showCorrectAnswer && isCorrectAnswer
+                              ? 'bg-green-100 border-green-500 text-green-800'
+                              : 'bg-gray-50 border-gray-300'
                             : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
                         } ${currentQuestionState?.isSubmitted ? 'cursor-default' : 'cursor-pointer'}`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                            isUserAnswer
-                              ? currentQuestionState?.isSubmitted
-                                ? currentQuestionState?.isCorrect
-                                  ? 'bg-green-500 border-green-500 text-white'
-                                  : 'bg-red-500 border-red-500 text-white'
-                                : 'bg-blue-500 border-blue-500 text-white'
-                              : showCorrectAnswer && isCorrectAnswer
-                              ? 'bg-green-500 border-green-500 text-white'
-                              : 'bg-white border-gray-400'
-                          }`}>
-                            {(isUserAnswer || (showCorrectAnswer && isCorrectAnswer)) && (
-                              <span className="text-xs">✓</span>
-                            )}
-                          </div>
-                          <span>{option}</span>
-                          {showCorrectAnswer && isCorrectAnswer && (
-                            <span className="ml-auto text-green-600 font-medium">Correct Answer</span>
-                          )}
-                        </div>
-                      </button>
+                        <input
+                          type="checkbox"
+                          checked={isUserAnswer}
+                          onChange={(e) => {
+                            if (currentQuestionState?.isSubmitted) return;
+                            handleAnswerSelect(option);
+                          }}
+                          disabled={currentQuestionState?.isSubmitted}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <span className="ml-3 flex-1">{option}</span>
+                        {showCorrectAnswer && isCorrectAnswer && (
+                          <span className="ml-auto text-green-600 font-medium">Correct</span>
+                        )}
+                        {currentQuestionState?.isSubmitted && isUserAnswer && !isCorrectAnswer && (
+                          <span className="ml-auto text-red-600 font-medium">Incorrect</span>
+                        )}
+                      </label>
                     );
                   })}
                 </div>

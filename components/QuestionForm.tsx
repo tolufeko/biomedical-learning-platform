@@ -47,7 +47,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         type: q.type,
         question: q.question,
         options: q.options || [],
-        correctAnswer: q.correctAnswer || ''
+        correctAnswer: q.correctAnswer || []
       }));
       setQuestions(convertedQuestions);
     }
@@ -55,8 +55,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
 
   const questionTypes = [
     { value: 'text', label: 'Text' },
-    { value: 'multiple-choice', label: 'Multiple Choice' },
-    { value: 'checkbox', label: 'Checkbox' }
+    { value: 'multiple-choice', label: 'Multiple Choice' }
   ];
 
   const addQuestion = () => {
@@ -65,10 +64,10 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       type: 'text',
       question: '',
       options: [''],
-      correctAnswer: ''
+      correctAnswer: []
     };
     setQuestions([...questions, newQuestion]);
-    setCurrentQuestionIndex(questions.length); // Navigate to the new question
+    setCurrentQuestionIndex(questions.length);
   };
 
   const updateQuestion = (id: string, field: keyof LocalQuestion, value: any) => {
@@ -102,7 +101,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     const newQuestions = questions.filter(q => q.id !== id);
     setQuestions(newQuestions);
     
-    // Adjust current index if needed
     if (currentQuestionIndex >= newQuestions.length) {
       setCurrentQuestionIndex(Math.max(0, newQuestions.length - 1));
     }
@@ -119,28 +117,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     ));
   };
 
-  const handleCorrectAnswerChange = (questionId: string, value: string | string[]) => {
+  const handleMultipleChoiceAnswerChange = (questionId: string, selectedOptions: string[]) => {
     setQuestions(questions.map(q => 
-      q.id === questionId ? { ...q, correctAnswer: value } : q
+      q.id === questionId ? { ...q, correctAnswer: selectedOptions } : q
     ));
   };
 
-  const handleCheckboxCorrectAnswerChange = (questionId: string, optionIndex: number, checked: boolean) => {
-    setQuestions(questions.map(q => {
-      if (q.id === questionId) {
-        const currentAnswers = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
-        let newAnswers: string[];
-        
-        if (checked) {
-          newAnswers = [...currentAnswers, q.options[optionIndex]];
-        } else {
-          newAnswers = currentAnswers.filter((_, idx) => idx !== optionIndex);
-        }
-        
-        return { ...q, correctAnswer: newAnswers };
-      }
-      return q;
-    }));
+  const handleTextAnswerChange = (questionId: string, value: string) => {
+    setQuestions(questions.map(q => 
+      q.id === questionId ? { ...q, correctAnswer: value } : q
+    ));
   };
 
   const goToNextQuestion = () => {
@@ -181,14 +167,9 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       // Validate correct answer based on question type
       switch (q.type) {
         case 'text':
-        case 'textarea':
           return !q.correctAnswer || (q.correctAnswer as string).trim() === '';
         
         case 'multiple-choice':
-        case 'dropdown':
-          return !q.correctAnswer || q.options.indexOf(q.correctAnswer as string) === -1;
-        
-        case 'checkbox':
           return !Array.isArray(q.correctAnswer) || q.correctAnswer.length === 0;
         
         default:
@@ -240,7 +221,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   };
 
   const renderQuestionOptions = (question: LocalQuestion) => {
-    if (!['multiple-choice', 'checkbox', 'dropdown'].includes(question.type)) {
+    if (question.type !== 'multiple-choice') {
       return null;
     }
 
@@ -281,7 +262,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const renderCorrectAnswerField = (question: LocalQuestion) => {
     switch (question.type) {
       case 'text':
-      case 'textarea':
         return (
           <div className="form-group mt-3">
             <label className="block text-sm font-medium mb-2">
@@ -290,7 +270,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             <input
               type="text"
               value={question.correctAnswer as string}
-              onChange={(e) => handleCorrectAnswerChange(question.id, e.target.value)}
+              onChange={(e) => handleTextAnswerChange(question.id, e.target.value)}
               placeholder="Enter the correct answer"
               className="w-full border p-2 rounded"
               required
@@ -298,30 +278,56 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           </div>
         );
 
-      case 'multiple-choice':
+        case 'multiple-choice':
+          return (
+            <div className="form-group mt-3">
+              <label className="block text-sm font-medium mb-2">
+                Select Correct Answer(s) - Click to toggle:
+              </label>
+              
+              <div className="border border-gray-300 rounded-lg p-3 bg-white min-h-[120px] max-h-60 overflow-y-auto">
+                {question.options.map((option, index) => {
+                  const isSelected = Array.isArray(question.correctAnswer) && 
+                                  question.correctAnswer.includes(option);
+                  
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => {
+                        const currentAnswers = Array.isArray(question.correctAnswer) 
+                          ? question.correctAnswer 
+                          : [];
+                        
+                        const newAnswers = isSelected
+                          ? currentAnswers.filter(ans => ans !== option)
+                          : [...currentAnswers, option];
+                        
+                        handleMultipleChoiceAnswerChange(question.id, newAnswers);
+                      }}
+                      className={`m-1 px-3 py-2 rounded-full text-sm font-medium transition-all inline-block cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-500 text-white border border-blue-600 shadow-sm'
+                          : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                      }`}
+                    >
+                      {option || `Option ${index + 1}`}
+                      {isSelected && <span className="ml-1">✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
 
-      case 'checkbox':
-        return (
-          <div className="form-group mt-3">
-            <label className="block text-sm font-medium mb-2">
-              Select Correct Answers (multiple):
-            </label>
-            <div className="space-y-2">
-              {question.options.map((option, index) => (
-                <label key={index} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={Array.isArray(question.correctAnswer) && question.correctAnswer.includes(option)}
-                    onChange={(e) => handleCheckboxCorrectAnswerChange(question.id, index, e.target.checked)}
-                    className="mr-2"
-                  />
-                  <span>{option || `Option ${index + 1}`}</span>
-                </label>
-              ))}
+              {/* Selection Summary */}
+              {Array.isArray(question.correctAnswer) && question.correctAnswer.length > 0 && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-blue-800 text-sm">
+                    <strong>Selected answers:</strong> {question.correctAnswer.join(', ')}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        );
-
+          );
+          
       default:
         return null;
     }
