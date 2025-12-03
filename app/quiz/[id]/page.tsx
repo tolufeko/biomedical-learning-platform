@@ -6,19 +6,100 @@ import Link from "next/link";
 import { signOut } from "@/public/lib/utils";
 import { useAuth } from "@/public/lib/AuthContext";
 
+// =============== TYPE DEFINITIONS ===============
+
+interface HotspotAnswer {
+  x: number;
+  y: number;
+}
+
+function isStringArray(value: any): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+
+function isHotspotArray(value: any): value is HotspotAnswer[] {
+  return Array.isArray(value) && value.every(item => 
+    typeof item === 'object' && 
+    item !== null && 
+    'x' in item && 
+    'y' in item && 
+    typeof item.x === 'number' && 
+    typeof item.y === 'number'
+  );
+}
+
+function isHotspotAnswer(obj: any): obj is HotspotAnswer {
+  return obj && typeof obj === 'object' && 'x' in obj && 'y' in obj;
+}
+
+type QuestionType = 'text' | 'multiple-choice' | 'checkbox' | 'hotspot';
+
+interface BaseQuizQuestion {
+  id: string;
+  question_type: QuestionType;
+  question_text: string;
+  image_path?: string; // ✅ Now we store path, not URL
+  image_url?: string;   // ✅ Generated on load
+  display_order: number;
+}
+
+interface TextQuestion extends BaseQuizQuestion {
+  question_type: 'text';
+  correct_answer: string;
+}
+
+interface MultipleChoiceQuestion extends BaseQuizQuestion {
+  question_type: 'multiple-choice';
+  options: string[];
+  correct_answer: string[];
+}
+
+interface CheckboxQuestion extends BaseQuizQuestion {
+  question_type: 'checkbox';
+  options: string[];
+  correct_answer: string[];
+}
+
+interface HotspotQuestion extends BaseQuizQuestion {
+  question_type: 'hotspot';
+  correct_answer: HotspotAnswer[];
+}
+
+type QuizQuestion = TextQuestion | MultipleChoiceQuestion | CheckboxQuestion | HotspotQuestion;
+
 interface QuizData {
   id: string;
   title: string;
   description?: string;
-  quiz_questions: any[];
+  quiz_questions: QuizQuestion[];
 }
 
+// Discriminated union for user answer state
+interface TextAnswerState {
+  type: 'text';
+  userAnswer: string | null;
+}
+
+interface ChoiceAnswerState {
+  type: 'multiple-choice' | 'checkbox';
+  userAnswer: string[] | null;
+}
+
+interface HotspotAnswerState {
+  type: 'hotspot';
+  userAnswer: HotspotAnswer[] | null;
+}
+
+type AnswerState = TextAnswerState | ChoiceAnswerState | HotspotAnswerState;
+
 interface QuestionState {
-  userAnswer: string | string[] | null;
+  answerState: AnswerState;
   isSubmitted: boolean;
   isCorrect: boolean | null;
   showSolution: boolean;
 }
+
+// =============== MAIN COMPONENT ===============
 
 export default function QuizPage() {
   const { id } = useParams();
@@ -30,17 +111,31 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const { username, role } = useAuth();
 
-  // Filter only supported questions
-  const supportedQuestions = quizData?.quiz_questions?.filter(q => 
-    q.question_type === 'multiple-choice' || 
-    q.question_type === 'text' || 
-    q.question_type === 'checkbox'
-  ) || [];
-
-  const totalQuestions = supportedQuestions.length;
-  const currentQuestion = supportedQuestions[currentQuestionIndex];
+  const questions = quizData?.quiz_questions || [];
+  const totalQuestions = questions.length;
+  const currentQuestion = questions[currentQuestionIndex];
   const currentQuestionState = questionStates[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
+
+  // Helper: Check if user has provided an answer
+  const hasUserAnswer = (state: QuestionState | undefined): boolean => {
+    if (!state || !state.answerState) return false;
+    const { answerState } = state;
+    
+    if (answerState.type === 'text') {
+      return !!answerState.userAnswer?.trim();
+    }
+    
+    if (answerState.type === 'multiple-choice' || answerState.type === 'checkbox') {
+      return Array.isArray(answerState.userAnswer) && answerState.userAnswer.length > 0;
+    }
+    
+    if (answerState.type === 'hotspot') {
+      return Array.isArray(answerState.userAnswer) && answerState.userAnswer.length > 0;
+    }
+    
+    return false;
+  };
 
   // Calculate score
   const calculateScore = () => {
@@ -48,23 +143,41 @@ export default function QuizPage() {
     return {
       correct: correctAnswers,
       total: totalQuestions,
-      percentage: Math.round((correctAnswers / totalQuestions) * 100)
+      percentage: totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0
     };
   };
 
-  // Initialize question states when quiz data loads
+  // Initialize question states
   useEffect(() => {
-    if (supportedQuestions.length > 0) {
-      const initialStates: QuestionState[] = supportedQuestions.map(() => ({
-        userAnswer: null,
-        isSubmitted: false,
-        isCorrect: null,
-        showSolution: false
-      }));
+    if (questions.length > 0) {
+      const initialStates: QuestionState[] = questions.map((q) => {
+        let answerState: AnswerState;
+        switch (q.question_type) {
+          case 'text':
+            answerState = { type: 'text', userAnswer: null };
+            break;
+          case 'multiple-choice':
+          case 'checkbox':
+            answerState = { type: 'multiple-choice', userAnswer: null };
+            break;
+          case 'hotspot':
+            answerState = { type: 'hotspot', userAnswer: null };
+            break;
+          default:
+            answerState = { type: 'text', userAnswer: null };
+        }
+        return {
+          answerState,
+          isSubmitted: false,
+          isCorrect: null,
+          showSolution: false
+        };
+      });
       setQuestionStates(initialStates);
     }
-  }, [supportedQuestions.length]);
+  }, [questions.length]);
 
+  // Fetch quiz data
   useEffect(() => {
     if (!id) return;
   
@@ -91,88 +204,131 @@ export default function QuizPage() {
     fetchQuiz();
   }, [id]);
 
+  // =============== HANDLERS ===============
+  
+  const handleTextAnswerChange = (text: string) => {
+    if (currentQuestionState?.isSubmitted) return;
+    if (!currentQuestion || currentQuestion.question_type !== 'text') return;
+
+    const newStates = [...questionStates];
+    const currentState = newStates[currentQuestionIndex].answerState;
+
+    if (currentState.type === 'text') {
+      newStates[currentQuestionIndex] = {
+        ...newStates[currentQuestionIndex],
+        answerState: {
+          ...currentState,
+          userAnswer: text
+        }
+      };
+    }
+    setQuestionStates(newStates);
+  };
+
   const handleAnswerSelect = (answer: string) => {
     if (currentQuestionState?.isSubmitted) return;
-    
+    if (!currentQuestion || 
+        (currentQuestion.question_type !== 'multiple-choice' && 
+         currentQuestion.question_type !== 'checkbox')) return;
+
     const newStates = [...questionStates];
-    const currentAnswers = Array.isArray(currentQuestionState?.userAnswer) 
-      ? currentQuestionState.userAnswer 
-      : currentQuestionState?.userAnswer 
-        ? [currentQuestionState.userAnswer] 
-        : [];
-    
-    let newAnswers: string[];
-    if (currentAnswers.includes(answer)) {
-      // Deselect if already selected
-      newAnswers = currentAnswers.filter(a => a !== answer);
-    } else {
-      // Select new answer
-      newAnswers = [...currentAnswers, answer];
+    const currentState = newStates[currentQuestionIndex].answerState;
+
+    if (currentState.type === 'multiple-choice' || currentState.type === 'checkbox') {
+      const currentAnswers = currentState.userAnswer || [];
+      let newAnswers: string[];
+      if (currentAnswers.includes(answer)) {
+        newAnswers = currentAnswers.filter(a => a !== answer);
+      } else {
+        newAnswers = [...currentAnswers, answer];
+      }
+
+      newStates[currentQuestionIndex] = {
+        ...newStates[currentQuestionIndex],
+        answerState: {
+          ...currentState,
+          userAnswer: newAnswers
+        }
+      };
     }
-    
-    newStates[currentQuestionIndex] = {
-      ...newStates[currentQuestionIndex],
-      userAnswer: newAnswers
-    };
     setQuestionStates(newStates);
   };
 
   const handleCheckboxAnswerSelect = (option: string, checked: boolean) => {
     if (currentQuestionState?.isSubmitted) return;
-    
+    if (!currentQuestion || currentQuestion.question_type !== 'checkbox') return;
+
     const newStates = [...questionStates];
-    const currentAnswers = Array.isArray(currentQuestionState?.userAnswer) 
-      ? currentQuestionState.userAnswer 
-      : [];
-    
-    let newAnswers: string[];
-    if (checked) {
-      newAnswers = [...currentAnswers, option];
-    } else {
-      newAnswers = currentAnswers.filter(answer => answer !== option);
+    const currentState = newStates[currentQuestionIndex].answerState;
+
+    if (currentState.type === 'checkbox') {
+      const currentAnswers = currentState.userAnswer || [];
+      let newAnswers: string[];
+      if (checked) {
+        newAnswers = [...currentAnswers, option];
+      } else {
+        newAnswers = currentAnswers.filter(answer => answer !== option);
+      }
+
+      newStates[currentQuestionIndex] = {
+        ...newStates[currentQuestionIndex],
+        answerState: {
+          ...currentState,
+          userAnswer: newAnswers
+        }
+      };
     }
-    
-    newStates[currentQuestionIndex] = {
-      ...newStates[currentQuestionIndex],
-      userAnswer: newAnswers
-    };
     setQuestionStates(newStates);
   };
 
-  const handleTextAnswerChange = (text: string) => {
+  const handleHotspotClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (currentQuestionState?.isSubmitted) return;
-    
-    const newStates = [...questionStates];
-    newStates[currentQuestionIndex] = {
-      ...newStates[currentQuestionIndex],
-      userAnswer: text
-    };
-    setQuestionStates(newStates);
+    if (!currentQuestion?.image_url || currentQuestion.question_type !== 'hotspot') return;
+  
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+  
+    const newSpot: HotspotAnswer = { x, y };
+    const currentState = currentQuestionState?.answerState;
+  
+    if (currentState?.type === 'hotspot') {
+      const currentSpots = currentState.userAnswer || [];
+      let newSpots = [...currentSpots];
+  
+      // Check if there's already a hotspot near this click (within 3%)
+      const existingIndex = currentSpots.findIndex(spot => {
+        const dx = spot.x - x;
+        const dy = spot.y - y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < 3; // 3% radius
+      });
+  
+      if (existingIndex !== -1) {
+        // Remove existing hotspot
+        newSpots = currentSpots.filter((_, i) => i !== existingIndex);
+      } else {
+        // Add new hotspot
+        newSpots = [...currentSpots, newSpot];
+      }
+  
+      const newStates = [...questionStates];
+      newStates[currentQuestionIndex] = {
+        ...newStates[currentQuestionIndex],
+        answerState: {
+          ...currentState,
+          userAnswer: newSpots
+        }
+      };
+      setQuestionStates(newStates);
+    }
   };
 
   const submitAnswer = () => {
-    if (!currentQuestion || !currentQuestionState?.userAnswer) return;
-    
+    if (!currentQuestion || !currentQuestionState || !hasUserAnswer(currentQuestionState)) return;
+  
+    const isCorrect = gradeQuestion(currentQuestion, currentQuestionState);
     const newStates = [...questionStates];
-    let isCorrect = false;
-    
-    if (currentQuestion.question_type === 'checkbox' || currentQuestion.question_type === 'multiple-choice') {
-      // For both checkbox and multiple-choice questions, compare arrays
-      const userAnswers = Array.isArray(currentQuestionState.userAnswer) 
-        ? currentQuestionState.userAnswer.sort() 
-        : [currentQuestionState.userAnswer].sort();
-      const correctAnswers = Array.isArray(currentQuestion.correct_answer) 
-        ? currentQuestion.correct_answer.sort() 
-        : [currentQuestion.correct_answer].sort();
-      
-      isCorrect = userAnswers.length === correctAnswers.length && 
-                  userAnswers.every((answer, index) => answer === correctAnswers[index]);
-    } else {
-      // For text questions
-      isCorrect = currentQuestionState.userAnswer.toString().toLowerCase().trim() === 
-                  currentQuestion.correct_answer.toString().toLowerCase().trim();
-    }
-    
     newStates[currentQuestionIndex] = {
       ...newStates[currentQuestionIndex],
       isSubmitted: true,
@@ -185,7 +341,7 @@ export default function QuizPage() {
   const retryQuestion = () => {
     const newStates = [...questionStates];
     newStates[currentQuestionIndex] = {
-      userAnswer: null,
+      ...newStates[currentQuestionIndex],
       isSubmitted: false,
       isCorrect: null,
       showSolution: false
@@ -221,21 +377,127 @@ export default function QuizPage() {
   };
 
   const finishQuiz = () => {
+    const newStates = [...questionStates];
+    let hasChanges = false;
+  
+    for (let i = 0; i < questions.length; i++) {
+      const question = questions[i];
+      const state = newStates[i];
+  
+      // Only grade if not already submitted and has an answer
+      if (!state.isSubmitted && hasUserAnswer(state)) {
+        const isCorrect = gradeQuestion(question, state);
+        newStates[i] = {
+          ...state,
+          isSubmitted: true,
+          isCorrect,
+          showSolution: false
+        };
+        hasChanges = true;
+      }
+      // If no answer, mark as submitted but incorrect
+      else if (!state.isSubmitted) {
+        newStates[i] = {
+          ...state,
+          isSubmitted: true,
+          isCorrect: false,
+          showSolution: false
+        };
+        hasChanges = true;
+      }
+    }
+  
+    if (hasChanges) {
+      setQuestionStates(newStates);
+    }
     setShowResults(true);
   };
 
   const restartQuiz = () => {
-    const newStates = supportedQuestions.map(() => ({
-      userAnswer: null,
-      isSubmitted: false,
-      isCorrect: null,
-      showSolution: false
-    }));
+    const newStates = questions.map((q) => {
+      let answerState: AnswerState;
+      switch (q.question_type) {
+        case 'text':
+          answerState = { type: 'text', userAnswer: null };
+          break;
+        case 'multiple-choice':
+        case 'checkbox':
+          answerState = { type: 'multiple-choice', userAnswer: null };
+          break;
+        case 'hotspot':
+          answerState = { type: 'hotspot', userAnswer: null };
+          break;
+        default:
+          answerState = { type: 'text', userAnswer: null };
+      }
+      return {
+        answerState,
+        isSubmitted: false,
+        isCorrect: null,
+        showSolution: false
+      };
+    });
     setQuestionStates(newStates);
     setCurrentQuestionIndex(0);
     setShowResults(false);
   };
 
+  // Helper: Grade a single question
+  const gradeQuestion = (
+    question: QuizQuestion,
+    state: QuestionState
+  ): boolean => {
+    if (question.question_type === 'hotspot' && state.answerState.type === 'hotspot') {
+      const userSpots = state.answerState.userAnswer || [];
+      const correctSpots = question.correct_answer || [];
+      const toleranceRadius = 8; // or 10
+
+      const matches: { userIdx: number; correctIdx: number; distance: number }[] = [];
+      for (let i = 0; i < userSpots.length; i++) {
+        for (let j = 0; j < correctSpots.length; j++) {
+          const dx = userSpots[i].x - correctSpots[j].x;
+          const dy = userSpots[i].y - correctSpots[j].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance <= toleranceRadius) {
+            matches.push({ userIdx: i, correctIdx: j, distance });
+          }
+        }
+      }
+
+      matches.sort((a, b) => a.distance - b.distance);
+      const usedUser = new Set<number>();
+      const usedCorrect = new Set<number>();
+      let matchCount = 0;
+
+      for (const match of matches) {
+        if (!usedUser.has(match.userIdx) && !usedCorrect.has(match.correctIdx)) {
+          usedUser.add(match.userIdx);
+          usedCorrect.add(match.correctIdx);
+          matchCount++;
+        }
+      }
+
+      return matchCount === correctSpots.length && matchCount === userSpots.length;
+    }
+    else if (
+      (question.question_type === 'multiple-choice' || question.question_type === 'checkbox') && 
+      (state.answerState.type === 'multiple-choice' || state.answerState.type === 'checkbox')
+    ) {
+      const userAnswers = (state.answerState.userAnswer || []).sort();
+      const correctAnswers = question.correct_answer.sort();
+      return userAnswers.length === correctAnswers.length && 
+            userAnswers.every((answer, index) => answer === correctAnswers[index]);
+    } 
+    else if (question.question_type === 'text' && state.answerState.type === 'text') {
+      const userAnswer = state.answerState.userAnswer || '';
+      const correctAnswer = question.correct_answer.toLowerCase().trim();
+      return userAnswer.toLowerCase().trim() === correctAnswer;
+    }
+    return false;
+  };
+
+  // =============== UI RENDERING ===============
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -260,13 +522,13 @@ export default function QuizPage() {
     );
   }
 
-  // Results Screen
+  // =============== RESULTS SCREEN ===============
+  
   if (showResults) {
     const score = calculateScore();
     
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* Navbar */}
         <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
           <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
           <div className="flex gap-6 items-center">
@@ -300,7 +562,6 @@ export default function QuizPage() {
           <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-8 text-center">
             <h2 className="text-3xl font-bold text-gray-800 mb-6">Quiz Completed!</h2>
             
-            {/* Score Display */}
             <div className="mb-8">
               <div className={`text-6xl font-bold mb-4 ${
                 score.percentage >= 80 ? 'text-green-600' :
@@ -313,7 +574,6 @@ export default function QuizPage() {
               </p>
             </div>
 
-            {/* Performance Message */}
             <div className="mb-8 p-4 rounded-lg bg-gray-50">
               <p className="text-lg font-medium text-gray-800">
                 {score.percentage >= 90 ? 'Excellent! 🎉' :
@@ -323,7 +583,6 @@ export default function QuizPage() {
               </p>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-4 justify-center flex-wrap">
               <button
                 onClick={restartQuiz}
@@ -339,38 +598,60 @@ export default function QuizPage() {
               </Link>
             </div>
 
-            {/* Question Review */}
             <details className="mt-8 text-left">
               <summary className="cursor-pointer font-semibold text-gray-700 text-lg">
                 Review Your Answers
               </summary>
               <div className="mt-4 space-y-4">
-                {supportedQuestions.map((question, index) => {
+                {questions.map((question, index) => {
                   const state = questionStates[index];
-                  const userAnswer = Array.isArray(state?.userAnswer) 
-                    ? state.userAnswer.join(', ') 
-                    : state?.userAnswer;
-                  const correctAnswer = Array.isArray(question.correct_answer)
-                    ? question.correct_answer.join(', ')
-                    : question.correct_answer;
+                  let userAnswerDisplay = 'No answer';
+                  let correctAnswerDisplay = '';
+
+                  if (question.question_type === 'hotspot') {
+                    const userSpots = state.answerState.type === 'hotspot'
+                      ? state.answerState.userAnswer || []
+                      : [];
+                    const correctSpots = question.correct_answer || [];
+
+                    userAnswerDisplay = userSpots.length > 0
+                      ? userSpots.map((s, i) => `(${Math.round(s.x)}%,${Math.round(s.y)}%)`).join(', ')
+                      : 'No answer';
+
+                    correctAnswerDisplay = correctSpots.length > 0
+                      ? correctSpots.map((s, i) => `(${Math.round(s.x)}%,${Math.round(s.y)}%)`).join(', ')
+                      : '–';
+                  }
+                  else if (question.question_type === 'multiple-choice' || question.question_type === 'checkbox') {
+                    userAnswerDisplay = state.answerState.type === 'multiple-choice'
+                      ? (state.answerState.userAnswer?.join(', ') || 'No answer')
+                      : 'No answer';
+                    correctAnswerDisplay = question.correct_answer.join(', ');
+                  } 
+                  else if (question.question_type === 'text') {
+                    userAnswerDisplay = state.answerState.type === 'text'
+                      ? (state.answerState.userAnswer || 'No answer')
+                      : 'No answer';
+                    correctAnswerDisplay = question.correct_answer;
+                  }
                   
                   return (
                     <div key={index} className="p-4 border rounded-lg bg-gray-50">
                       <div className="flex items-start gap-3 mb-2">
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm ${
-                          state?.isCorrect ? 'bg-green-500' : 'bg-red-500'
+                          state.isCorrect ? 'bg-green-500' : 'bg-red-500'
                         }`}>
-                          {state?.isCorrect ? '✓' : '✗'}
+                          {state.isCorrect ? '✓' : '✗'}
                         </span>
                         <div>
                           <p className="font-medium">Question {index + 1}: {question.question_text}</p>
                           <p className="text-sm text-gray-600 mt-1">
-                            Your answer: <span className={state?.isCorrect ? 'text-green-600' : 'text-red-600'}>
-                              {userAnswer || 'No answer'}
+                            Your answer: <span className={state.isCorrect ? 'text-green-600' : 'text-red-600'}>
+                              {userAnswerDisplay}
                             </span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Correct answer: {correctAnswer}
+                            Correct answer: {correctAnswerDisplay}
                           </p>
                         </div>
                       </div>
@@ -385,9 +666,10 @@ export default function QuizPage() {
     );
   }
 
+  // =============== QUIZ TAKING SCREEN ===============
+  
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navbar */}
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
@@ -418,27 +700,23 @@ export default function QuizPage() {
       </nav>
 
       <main className="flex flex-col items-center mt-8 px-6 pb-8">
-        {/* Quiz Title */}
         <h2 className="text-3xl font-semibold mb-2 text-gray-800 text-center">
           {quizData.title}
         </h2>
 
-        {/* Quiz Description */}
         {quizData.description && (
           <p className="text-gray-600 mb-6 text-center max-w-2xl">
             {quizData.description}
           </p>
         )}
 
-        {/* Progress Indicator */}
         <div className="mb-6 text-lg text-gray-700 font-medium">
           Question {currentQuestionIndex + 1} of {totalQuestions}
         </div>
 
-        {/* Question Navigation Dots */}
         {totalQuestions > 1 && (
           <div className="flex justify-center gap-2 mb-6 flex-wrap">
-            {supportedQuestions.map((_, index) => (
+            {questions.map((_, index) => (
               <button
                 key={index}
                 onClick={() => goToQuestion(index)}
@@ -459,27 +737,21 @@ export default function QuizPage() {
           </div>
         )}
 
-        {/* Question Display */}
         <div className="w-full max-w-4xl mb-8">
           {currentQuestion ? (
             <div className="bg-white rounded-lg shadow-md p-6 border">
-              {/* Question Text */}
-              <div className="mb-6">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4">
-                  {currentQuestion.question_text}
-                </h3>
-              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                {currentQuestion.question_text}
+              </h3>
 
-              {/* Multiple Choice Question - Now allows multiple selection */}
+              {/* Multiple Choice */}
               {currentQuestion.question_type === 'multiple-choice' && (
                 <div className="space-y-3 mb-6">
-                  {currentQuestion.options.map((option: string, index: number) => {
-                    const isUserAnswer = Array.isArray(currentQuestionState?.userAnswer) 
-                      ? currentQuestionState.userAnswer.includes(option)
-                      : currentQuestionState?.userAnswer === option;
-                    const isCorrectAnswer = Array.isArray(currentQuestion.correct_answer)
-                      ? currentQuestion.correct_answer.includes(option)
-                      : currentQuestion.correct_answer === option;
+                  {currentQuestion.options.map((option, index) => {
+                    const isUserAnswer = currentQuestionState?.answerState.type === 'multiple-choice' 
+                      ? currentQuestionState.answerState.userAnswer?.includes(option)
+                      : false;
+                    const isCorrectAnswer = currentQuestion.correct_answer.includes(option);
                     const showCorrectAnswer = currentQuestionState?.showSolution;
                     
                     return (
@@ -499,11 +771,8 @@ export default function QuizPage() {
                       >
                         <input
                           type="checkbox"
-                          checked={isUserAnswer}
-                          onChange={(e) => {
-                            if (currentQuestionState?.isSubmitted) return;
-                            handleAnswerSelect(option);
-                          }}
+                          checked={!!isUserAnswer}
+                          onChange={() => handleAnswerSelect(option)}
                           disabled={currentQuestionState?.isSubmitted}
                           className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                         />
@@ -520,14 +789,14 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* Checkbox Question */}
+              {/* Checkbox */}
               {currentQuestion.question_type === 'checkbox' && (
                 <div className="space-y-3 mb-6">
-                  {currentQuestion.options.map((option: string, index: number) => {
-                    const isUserAnswer = Array.isArray(currentQuestionState?.userAnswer) && 
-                                        currentQuestionState.userAnswer.includes(option);
-                    const isCorrectAnswer = Array.isArray(currentQuestion.correct_answer) && 
-                                           currentQuestion.correct_answer.includes(option);
+                  {currentQuestion.options.map((option, index) => {
+                    const isUserAnswer = currentQuestionState?.answerState.type === 'multiple-choice' 
+                      ? currentQuestionState.answerState.userAnswer?.includes(option)
+                      : false;
+                    const isCorrectAnswer = currentQuestion.correct_answer.includes(option);
                     const showCorrectAnswer = currentQuestionState?.showSolution;
                     
                     return (
@@ -547,12 +816,8 @@ export default function QuizPage() {
                       >
                         <input
                           type="checkbox"
-                          checked={Array.isArray(currentQuestionState?.userAnswer) && 
-                                  currentQuestionState.userAnswer.includes(option)}
-                          onChange={(e) => {
-                            if (currentQuestionState?.isSubmitted) return;
-                            handleCheckboxAnswerSelect(option, e.target.checked);
-                          }}
+                          checked={!!isUserAnswer}
+                          onChange={(e) => handleCheckboxAnswerSelect(option, e.target.checked)}
                           disabled={currentQuestionState?.isSubmitted}
                           className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                         />
@@ -569,12 +834,14 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* Text Question */}
+              {/* Text */}
               {currentQuestion.question_type === 'text' && (
                 <div className="mb-6">
                   <input
                     type="text"
-                    value={currentQuestionState?.userAnswer || ''}
+                    value={currentQuestionState?.answerState.type === 'text' 
+                      ? currentQuestionState.answerState.userAnswer || '' 
+                      : ''}
                     onChange={(e) => handleTextAnswerChange(e.target.value)}
                     disabled={currentQuestionState?.isSubmitted}
                     placeholder="Type your answer here..."
@@ -596,7 +863,72 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* Feedback Message */}
+              {/* Hotspot */}
+              {currentQuestion.question_type === 'hotspot' && (
+                <div className="mb-6">
+                  {currentQuestion.image_url ? (
+                    <div 
+                      className="relative inline-block border rounded-lg bg-gray-100 overflow-hidden cursor-crosshair"
+                      onClick={handleHotspotClick}
+                    >
+                      <img
+                        src={currentQuestion.image_url}
+                        alt="Hotspot question"
+                        className="max-w-full h-auto"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/placeholder.png';
+                        }}
+                      />
+                      
+                      {/* User's hotspot */}
+                      {currentQuestionState?.answerState.type === 'hotspot' && 
+                        Array.isArray(currentQuestionState.answerState.userAnswer) && 
+                        currentQuestionState.answerState.userAnswer.map((spot, idx) => {
+                          if (!isHotspotAnswer(spot)) return null;
+                          return (
+                            <div
+                              key={idx}
+                              className="absolute w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow"
+                              style={{
+                                left: `${spot.x}%`,
+                                top: `${spot.y}%`,
+                                transform: 'translate(-50%, -50%)',
+                              }}
+                            />
+                          );
+                        })}
+
+                      {/* Correct hotspot */}
+                      {currentQuestionState?.showSolution &&
+                        currentQuestion.correct_answer.map((spot, idx) => (
+                          <div
+                            key={`correct-${idx}`}
+                            className="absolute w-6 h-6 bg-green-500 rounded-full border-2 border-white shadow"
+                            style={{
+                              left: `${spot.x}%`,
+                              top: `${spot.y}%`,
+                              transform: 'translate(-50%, -50%)',
+                            }}
+                            title="Correct answer"
+                          />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="bg-red-100 text-red-800 p-4 rounded-lg">
+                      ⚠️ No image provided for hotspot question.
+                    </div>
+                  )}
+
+                  <div className="mt-3 text-sm text-gray-600">
+                    {!currentQuestionState?.isSubmitted
+                      ? "Click on the image to add hotspots. Click an existing hotspot to remove it."
+                      : currentQuestionState.isCorrect
+                      ? "✅ Perfect! You clicked all the correct locations."
+                      : "❌ Not quite. Make sure you clicked all (and only) the correct locations."}
+                  </div>
+                </div>
+              )}
+
               {currentQuestionState?.isSubmitted && (
                 <div className={`p-4 rounded-lg mb-4 ${
                   currentQuestionState.isCorrect
@@ -624,7 +956,6 @@ export default function QuizPage() {
           )}
         </div>
 
-        {/* Navigation Buttons - Only show Previous/Next, no Finish button here */}
         {totalQuestions > 1 && (
           <div className="flex justify-between w-full max-w-4xl gap-4">
             <button
@@ -653,19 +984,14 @@ export default function QuizPage() {
           </div>
         )}
         
-        {/* Action Buttons */}
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-3 flex-wrap justify-center mt-4">
           {!currentQuestionState?.isSubmitted ? (
             <>
               <button
                 onClick={submitAnswer}
-                disabled={!currentQuestionState?.userAnswer || 
-                        (Array.isArray(currentQuestionState.userAnswer) && 
-                          currentQuestionState.userAnswer.length === 0)}
+                disabled={!hasUserAnswer(currentQuestionState)}
                 className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                  currentQuestionState?.userAnswer && 
-                  (!Array.isArray(currentQuestionState.userAnswer) || 
-                  currentQuestionState.userAnswer.length > 0)
+                  hasUserAnswer(currentQuestionState)
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}

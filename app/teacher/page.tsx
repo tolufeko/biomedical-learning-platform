@@ -8,41 +8,53 @@ import { signOut } from "@/public/lib/utils";
 import { useAuth } from "@/public/lib/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
 
-interface QuizQuestion { // Changed from FormQuestion
+// =============== TYPE DEFINITIONS ===============
+
+interface HotspotAnswer {
+  x: number;
+  y: number;
+}
+
+type QuestionCorrectAnswer = string | string[] | HotspotAnswer[];
+
+interface QuizQuestion {
   id: string;
   question_type: string;
   question_text: string;
   options: string[];
-  correct_answer: string | string[];
+  correct_answer: QuestionCorrectAnswer;
   display_order: number;
+  image_path?: string;   // ✅ From DB
+  image_url?: string;    // ✅ From API (generated signed URL)
 }
 
-interface Quiz { // Changed from CustomForm
+interface Quiz {
   id: string;
   title: string;
   description?: string;
   question_ids: string[];
-  questions?: any[];
-  quiz_questions: QuizQuestion[]; // Changed from form_questions
+  quiz_questions: QuizQuestion[];
   created_at: string;
   updated_at: string;
   user_id: string;
 }
 
+// =============== MAIN COMPONENT ===============
+
 export default function AdminPage() {
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]); // Changed from CustomForm[]
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const { username, role, user } = useAuth();
   const [formSearchTerm, setFormSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [formsLoading, setFormsLoading] = useState(false);
-  const [editingForm, setEditingForm] = useState<Quiz | null>(null); // Changed from CustomForm
+  const [editingForm, setEditingForm] = useState<Quiz | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [resetFormKey, setResetFormKey] = useState(0);
   const router = useRouter();
 
-  // Check if user is teacher or admin
+  // Check access
   useEffect(() => {
     const checkAccess = async () => {
       if (!user) {
@@ -61,7 +73,7 @@ export default function AdminPage() {
     checkAccess();
   }, [user, role, router]);
 
-  // Clear messages after a delay
+  // Clear messages
   useEffect(() => {
     if (error || success) {
       const timer = setTimeout(() => {
@@ -76,7 +88,7 @@ export default function AdminPage() {
   const fetchQuizzes = async () => {
     setFormsLoading(true);
     try {
-      const res = await fetch('/api/quizzes'); // Changed endpoint
+      const res = await fetch('/api/quizzes');
       if (res.ok) {
         const data = await res.json();
         setQuizzes(data || []);
@@ -101,7 +113,7 @@ export default function AdminPage() {
   // Handle quiz submission
   const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string }) => {
     try {
-      const response = await fetch('/api/quizzes', { // Changed endpoint
+      const response = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,7 +142,7 @@ export default function AdminPage() {
     if (!editingForm) return;
 
     try {
-      const deleteResponse = await fetch(`/api/quizzes/${editingForm.id}`, { // Changed endpoint
+      const deleteResponse = await fetch(`/api/quizzes/${editingForm.id}`, {
         method: 'DELETE',
       });
 
@@ -138,7 +150,7 @@ export default function AdminPage() {
         throw new Error('Failed to delete existing quiz');
       }
 
-      const createResponse = await fetch('/api/quizzes', { // Changed endpoint
+      const createResponse = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,7 +182,7 @@ export default function AdminPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/quizzes/${quizId}`, { // Changed endpoint
+      const res = await fetch(`/api/quizzes/${quizId}`, {
         method: 'DELETE' 
       });
       
@@ -188,10 +200,22 @@ export default function AdminPage() {
     }
   };
 
-  // Start editing a quiz
-  const handleEditQuiz = (quiz: Quiz) => {
-    setEditingForm(quiz);
-    setIsEditModalOpen(true);
+  // ✅ Fetch full quiz data (with image_url) on edit
+  const handleEditQuiz = async (quizId: string) => {
+    setFormsLoading(true);
+    try {
+      const res = await fetch(`/api/quizzes/${quizId}`);
+      if (!res.ok) throw new Error('Failed to fetch quiz');
+      
+      const fullQuiz = await res.json();
+      setEditingForm(fullQuiz);
+      setIsEditModalOpen(true);
+    } catch (err) {
+      console.error('Failed to load quiz for editing:', err);
+      setError('Could not load quiz for editing');
+    } finally {
+      setFormsLoading(false);
+    }
   };
 
   // Close edit modal
@@ -200,17 +224,30 @@ export default function AdminPage() {
     setIsEditModalOpen(false);
   };
 
-  // Convert quiz questions to the format expected by QuestionForm
+  // ✅ Convert quiz questions to QuestionForm format (with image data)
   const convertQuizQuestions = (questions: QuizQuestion[]) => {
-    return questions.map(q => ({
-      type: q.question_type,
-      question: q.question_text,
-      options: q.options || [],
-      correctAnswer: q.correct_answer
-    }));
+    return questions.map(q => {
+      if (q.question_type === 'hotspot') {
+        return {
+          type: q.question_type,
+          question: q.question_text,
+          options: q.options || [],
+          correctAnswer: q.correct_answer,
+          image_url: q.image_url || '',      // ✅ Critical: pass image_url
+          image_path: q.image_path || '',    // ✅ Critical: pass image_path
+        };
+      }
+      
+      return {
+        type: q.question_type,
+        question: q.question_text,
+        options: q.options || [],
+        correctAnswer: q.correct_answer
+      };
+    });
   };
 
-  // Show loading state
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -354,7 +391,7 @@ export default function AdminPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {quiz.quiz_questions?.slice(0, 5).map((q: QuizQuestion, idx: number) => (
+                            {quiz.quiz_questions?.slice(0, 5).map((q, idx) => (
                               <span 
                                 key={q.id} 
                                 className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded capitalize"
@@ -378,7 +415,7 @@ export default function AdminPage() {
                           </Link>
                           <button
                             className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
-                            onClick={() => handleEditQuiz(quiz)}
+                            onClick={() => handleEditQuiz(quiz.id)} // ✅ Pass ID, not object
                           >
                             Edit
                           </button>

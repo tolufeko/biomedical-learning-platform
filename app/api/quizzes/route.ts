@@ -1,3 +1,4 @@
+// app/api/quizzes/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -18,6 +19,7 @@ export async function GET() {
           question_text,
           options,
           correct_answer,
+          image_path,
           display_order
         )
       `)
@@ -39,9 +41,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const formData = await request.json();
-    const { title, questions, description, userId } = formData; // Add userId to destructuring
-
-    console.log("Received form data:", { title, questionsCount: questions?.length, description, userId });
+    const { title, questions, description, userId } = formData;
 
     if (!title || !questions) {
       return NextResponse.json(
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
           title,
           description: description || null,
           question_ids: [],
-          user_id: userId, // Add user_id here
+          user_id: userId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       question_text: q.question,
       options: q.options,
       correct_answer: q.correctAnswer,
+      image_path: q.image_path || null,
       display_order: index,
     }));
 
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
           question_text,
           options,
           correct_answer,
+          image_path,
           display_order
         )
       `)

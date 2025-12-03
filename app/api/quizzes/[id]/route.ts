@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+// app/api/quizzes/[id]/route.ts
+import { createClient } from '@supabase/supabase-js';
+import { type NextRequest, NextResponse } from 'next/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,15 +8,12 @@ const supabase = createClient(
 );
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-
-    if (!id) {
-      return NextResponse.json({ error: "Form ID is required" }, { status: 400 });
-    }
+    if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
     const { data, error } = await supabase
       .from("quiz")
@@ -27,55 +25,52 @@ export async function GET(
           question_text,
           options,
           correct_answer,
+          image_path,
           display_order
         )
       `)
       .eq("id", id)
       .single();
 
-    if (error) {
-      console.error("Supabase error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) throw error;
+    if (!data) return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
 
-    if (!data) {
-      return NextResponse.json({ error: "Form not found" }, { status: 404 });
+    // Generate fresh signed URLs for hotspot images
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    for (const q of data.quiz_questions) {
+      if (q.question_type === 'hotspot' && q.image_path) {
+        const {  data: signedUrlData } = await supabaseAdmin.storage
+          .from('quiz-images')
+          .createSignedUrl(q.image_path, 3600);
+        q.image_url = signedUrlData?.signedUrl || null;
+      }
     }
 
     return NextResponse.json(data);
-
   } catch (err: any) {
-    console.error("API error:", err);
+    console.error("GET /quizzes/[id] error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    if (!id) {
-      return NextResponse.json({ error: "Form ID is required" }, { status: 400 });
-    }
+    const { error } = await supabase.from("quiz").delete().eq("id", id);
 
-    // Delete will cascade to quiz_questions due to ON DELETE CASCADE
-    const { error } = await supabase
-      .from("quiz")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      console.error("Supabase error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, message: "Form deleted successfully" });
-
+    if (error) throw error;
+    return NextResponse.json({ success: true, message: "Quiz deleted successfully" });
   } catch (err: any) {
-    console.error("API error:", err);
+    console.error("DELETE /quizzes/[id] error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
