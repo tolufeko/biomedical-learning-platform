@@ -493,7 +493,39 @@ export default function QuizPage() {
     state: QuestionState
   ): boolean => {
     if (question.question_type === 'hotspot' && state.answerState.type === 'hotspot') {
-      // ... (your existing hotspot logic — correct_answer is array of points)
+      const userSpots = state.answerState.userAnswer || [];
+      const correctSpots = question.correct_answer || [];
+      const toleranceRadius = 8; // in percentage units (since x/y are %)
+  
+      // Build list of valid matches within tolerance
+      const matches: { userIdx: number; correctIdx: number; distance: number }[] = [];
+      for (let i = 0; i < userSpots.length; i++) {
+        for (let j = 0; j < correctSpots.length; j++) {
+          const dx = userSpots[i].x - correctSpots[j].x;
+          const dy = userSpots[i].y - correctSpots[j].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance <= toleranceRadius) {
+            matches.push({ userIdx: i, correctIdx: j, distance });
+          }
+        }
+      }
+  
+      // Greedy match: sort by closest distance, then assign 1:1
+      matches.sort((a, b) => a.distance - b.distance);
+      const usedUser = new Set<number>();
+      const usedCorrect = new Set<number>();
+      let matchCount = 0;
+
+      for (const match of matches) {
+        if (!usedUser.has(match.userIdx) && !usedCorrect.has(match.correctIdx)) {
+          usedUser.add(match.userIdx);
+          usedCorrect.add(match.correctIdx);
+          matchCount++;
+        }
+      }
+
+      // Must match all correct spots AND user must not have extra spots
+      return matchCount === correctSpots.length && matchCount === userSpots.length;
     }
     else if (
       (question.question_type === 'multiple-choice' || question.question_type === 'checkbox') && 
@@ -563,9 +595,6 @@ export default function QuizPage() {
             )}
             <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
               Home
-            </Link>
-            <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
-              Change Password
             </Link>
             <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
               Guide
@@ -704,9 +733,6 @@ export default function QuizPage() {
           )}
           <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
             Home
-          </Link>
-          <Link href="" className="text-gray-700 hover:text-blue-600 font-medium">
-            Change Password
           </Link>
           <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide

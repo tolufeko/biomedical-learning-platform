@@ -12,7 +12,7 @@ interface Quiz {
   id: string;
   title: string;
   description: string;
-  quiz_questions: any[]; // Changed from form_questions
+  quiz_questions: any[];
 }
 
 export default function HomePage() {
@@ -20,12 +20,13 @@ export default function HomePage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState(""); // <-- New state
   const { username, role } = useAuth();
 
   useEffect(() => {
     const fetchQuizzes = async () => {
       try {
-        const response = await fetch('/api/quizzes'); // Changed endpoint
+        const response = await fetch('/api/quizzes');
         if (!response.ok) {
           throw new Error('Failed to fetch quizzes');
         }
@@ -41,6 +42,14 @@ export default function HomePage() {
 
     fetchQuizzes();
   }, []);
+
+  // Filter quizzes based on search term (case-insensitive)
+  const filteredQuizzes = quizzes.filter(quiz =>
+    (quiz.title?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
+    (quiz.description?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
+  );
+
+  // Rest of your loading/error rendering stays the same...
 
   if (loading) {
     return (
@@ -147,18 +156,28 @@ export default function HomePage() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex flex-col items-center justify-center mt-16 px-6">
-        <h2 className="text-3xl font-semibold mb-8 text-gray-800">
+      <main className="flex flex-col items-center justify-center mt-8 px-6">
+        <h2 className="text-3xl font-semibold mb-4 text-gray-800">
           Welcome to your Biomedical Learning Hub
         </h2>
 
-        <p className="text-gray-700 mb-6">
+        <p className="text-gray-700 mb-4 text-center">
           Please click on the subject area you wish to revise.
         </p>
 
+        {/* Search Bar */}
+        <div className="w-full max-w-2xl mb-6">
+          <input
+            type="text"
+            placeholder="Search subjects..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
-          {/* Dynamic Quiz Cards */}
-          {quizzes.map((quiz) => (
+          {filteredQuizzes.map((quiz) => (
             <Card
               key={quiz.id}
               className="hover:shadow-lg transition cursor-pointer border-2 border-transparent hover:border-blue-200"
@@ -184,16 +203,10 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* Fallback if no quizzes exist */}
-        {quizzes.length === 0 && !loading && (
+        {filteredQuizzes.length === 0 && !loading && (
           <div className="text-center text-gray-500 mt-8">
-            <div className="text-lg mb-2">No subjects available yet</div>
-            <p className="text-sm mb-4">Check back later or contact your teacher to add subjects.</p>
-            {(role === 'teacher' || role === 'admin') && (
-              <Link href="/teacher" className="text-blue-600 hover:text-blue-800 underline">
-                Go to Teacher View to create subjects
-              </Link>
-            )}
+            <div className="text-lg mb-2">No subjects match your search</div>
+            <p className="text-sm mb-4">Try a different keyword.</p>
           </div>
         )}
       </main>

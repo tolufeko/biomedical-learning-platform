@@ -52,16 +52,7 @@ export default function LoginPage() {
       alert("Login failed: " + error.message);
       return;
     }
-
-    if (data.user?.id) {
-      const userRole = await fetchUserRole(data.user.id);
-      
-      if (userRole === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/home");
-      }
-    }
+    router.push("/home");
   };
 
   const handleAnonymousRegister = async () => {

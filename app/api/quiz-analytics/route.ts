@@ -51,7 +51,6 @@ export async function POST(request: Request) {
   }
 }
 
-// GET stays mostly the same
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
