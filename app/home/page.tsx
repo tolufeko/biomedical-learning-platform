@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/public/lib/utils";
-import { useAuth } from "@/public/lib/AuthContext";
+import { signOut } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
 
 interface Quiz {
   id: string;

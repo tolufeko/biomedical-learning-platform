@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/public/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
-import { signOut } from "@/public/lib/utils";
-import { useAuth } from "@/public/lib/AuthContext";
+import { signOut } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
 
 interface UserProfile {
   id: string;

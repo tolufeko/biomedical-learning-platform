@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/public/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 
 interface UserProfile {
   id: string;

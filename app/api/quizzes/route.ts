@@ -84,15 +84,39 @@ export async function POST(request: Request) {
     console.log("Form created:", form.id);
 
     // Insert questions into quiz_questions table
-    const formQuestions = questions.map((q: any, index: number) => ({
-      form_id: form.id,
-      question_type: q.type,
-      question_text: q.question,
-      options: q.options,
-      correct_answer: q.correctAnswer,
-      image_path: q.image_path || null,
-      display_order: index,
-    }));
+    const formQuestions = questions.map((q: any, index: number) => {
+      let correctAnswer = q.correctAnswer;
+
+      // Handle correctAnswer based on question type
+      if (q.type === 'text') {
+        // Keep as string (or convert to string if needed)
+        correctAnswer = typeof correctAnswer === 'string' 
+          ? correctAnswer 
+          : String(correctAnswer);
+      } else if (
+        q.type === 'multiple-choice' || 
+        q.type === 'checkbox' || 
+        q.type === 'hotspot'
+      ) {
+        // Ensure it's an array
+        if (!Array.isArray(correctAnswer)) {
+          correctAnswer = [correctAnswer];
+        }
+      } else {
+        // Fallback: preserve as-is (or log warning)
+        console.warn(`Unknown question type: ${q.type}, correctAnswer:`, correctAnswer);
+      }
+
+      return {
+        form_id: form.id,
+        question_type: q.type,
+        question_text: q.question,
+        options: q.options,
+        correct_answer: correctAnswer, // ✅ string for text, array for others
+        image_path: q.image_path || null,
+        display_order: index,
+      };
+    });
 
     console.log("Inserting questions:", formQuestions);
 

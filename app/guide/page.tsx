@@ -1,8 +1,8 @@
 'use client';
 
 import Link from "next/link";
-import { signOut } from "@/public/lib/utils";
-import { useAuth } from "@/public/lib/AuthContext";
+import { signOut } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function HelpPage() {
   const { username, role } = useAuth();

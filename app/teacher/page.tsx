@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { signOut } from "@/public/lib/utils";
-import { useAuth } from "@/public/lib/AuthContext";
+import { signOut } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
 
 // =============== TYPE DEFINITIONS ===============
