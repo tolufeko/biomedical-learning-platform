@@ -1,9 +1,8 @@
-// lib/AuthContext.tsx
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "./supabaseClient";
-import { getGuestUserCookie, clearGuestUserCookie } from "lib/cookieHelpers";
+import { supabase } from "@/lib/supabaseClient"; // ✅ Use absolute path
+import { getGuestUserCookie, clearGuestUserCookie } from "@/lib/cookieHelpers"; // ✅ Absolute path
 
 interface AuthContextType {
   user: any | null;
@@ -29,14 +28,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = async () => {
+  const handleAuthSession = async (session: any) => {
     setLoading(true);
-    
-    // First check for Supabase authenticated user
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    
-    if (currentUser?.id) {
-      setUser(currentUser);
+    const currentUser = session.user;
+    setUser(currentUser);
+
+    try {
       const { data: profileData, error } = await supabase
         .from("profiles")
         .select("role, username")
@@ -45,10 +42,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (!error && profileData) {
         setRole(profileData.role);
-        setUsername(profileData.username ?? null);
+        setUsername(profileData.username || null);
+      } else {
+        setRole("student");
+        setUsername(null);
       }
+    } catch (err) {
+      console.error("Failed to fetch profile:", err);
+      setRole("student");
+      setUsername(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUser = async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session?.user) {
+      await handleAuthSession(session);
     } else {
-      // Check for guest user in cookie
       const guestUser = getGuestUserCookie();
       if (guestUser) {
         setUser(guestUser);
@@ -59,19 +73,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setRole(null);
         setUsername(null);
       }
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const logout = async () => {
-    // Clear Supabase session
-    await supabase.auth.signOut();
-    
-    // Clear guest user cookie
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.warn("Supabase signOut failed:", error);
+    }
     clearGuestUserCookie();
-    
-    // Reset state
     setUser(null);
     setRole(null);
     setUsername(null);
@@ -81,23 +93,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     fetchUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setLoading(true);
-
-        if (session?.user?.id) {
-          setUser(session.user);
-          const { data: profileData, error } = await supabase
-            .from("profiles")
-            .select("role, username")
-            .eq("id", session.user.id)
-            .single();
-
-          if (!error && profileData) {
-            setRole(profileData.role);
-            setUsername(profileData.username ?? null);
-          }
+      (_event, session) => {
+        if (session?.user) {
+          handleAuthSession(session);
         } else {
-          // Check for guest user when no Supabase session
           const guestUser = getGuestUserCookie();
           if (guestUser) {
             setUser(guestUser);
@@ -108,9 +107,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setRole(null);
             setUsername(null);
           }
+          setLoading(false);
         }
-
-        setLoading(false);
       }
     );
 
