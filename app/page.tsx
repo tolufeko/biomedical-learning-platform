@@ -1,15 +1,36 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { setGuestUserCookie } from "@/lib/cookieHelpers";
+import { useAuth } from "@/lib/AuthContext"; // ✅
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, loading } = useAuth(); // ✅
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // 🔁 Redirect authenticated users
+  useEffect(() => {
+    if (!loading && user) {
+      router.push("/home");
+    }
+  }, [user, loading, router]);
+
+  // Show spinner while checking auth
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+      </main>
+    );
+  }
+
+  // Only show login form if NOT logged in
+  if (user) return null; // Should never reach here due to redirect
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

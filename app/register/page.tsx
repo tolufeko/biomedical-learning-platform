@@ -1,78 +1,96 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function SignUpPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.push("/home");
+    }
+  }, [user, authLoading, router]);
+
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+      </main>
+    );
+  }
+
+  if (user) return null;
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
-    // Basic validation
     if (password !== confirmPassword) {
       alert("Passwords do not match!");
+      setLoading(false);
       return;
     }
-    if (!username) {
+    if (!username.trim()) {
       alert("Please enter a username.");
+      setLoading(false);
       return;
     }
 
-    // 1️⃣ Check username uniqueness
-    const { data: usernameExists } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", username)
-      .single();
+    try {
+      const { data: usernameExists, error: usernameError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", username)
+        .single();
 
-    if (usernameExists) {
-      alert("Username is already taken.");
-      return;
+      // If error is NOT "no rows", it's a real error
+      if (usernameError && usernameError.code !== "PGRST116") {
+        throw usernameError;
+      }
+
+      if (usernameExists) {
+        alert("Username is already taken.");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { username } // ✅ Correct
+        }
+      });
+
+      if (error) throw error;
+
+      alert("Registration successful! Please check your email to confirm.");
+      router.push("/");
+
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      alert("Registration failed: " + (error.message || "Unknown error"));
+    } finally {
+      setLoading(false);
     }
-
-    // 2️⃣ Check email uniqueness via server
-    const res = await fetch("/api/auth/check-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const { exists } = await res.json();
-    if (exists) {
-      alert("Email is already registered.");
-      return;
-    }
-
-    // 3️⃣ Create user
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      alert("Registration failed: " + error.message);
-      return;
-    }
-
-    // 4️⃣ Update profiles table with username
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ username })
-      .eq("id", data.user?.id);
-
-    if (profileError) {
-      alert("Failed to set username: " + profileError.message);
-      return;
-    }
-
-    alert("Registration successful! Please check your email to confirm your account.");
   };
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-md bg-white shadow-md rounded-2xl p-8">
         <h1 className="text-3xl font-bold text-center text-blue-700 mb-6">
-          Biomedical Learning Platform
+          Create an Account
         </h1>
 
         <form onSubmit={handleRegister} className="space-y-4">
@@ -86,7 +104,7 @@ export default function SignUpPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
               className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Username"
+              placeholder="e.g. toluwani"
             />
           </div>
 
@@ -113,6 +131,7 @@ export default function SignUpPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={6}
               className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
             />
@@ -134,14 +153,20 @@ export default function SignUpPage() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            Register
+            disabled={loading}
+            className={`w-full font-semibold py-2 rounded-lg transition-colors ${
+              loading
+                ? "bg-blue-400 cursor-not-allowed"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
+          >
+            {loading ? "Creating Account..." : "Register"}
           </button>
         </form>
 
-        <p className="text-sm text-center text-gray-600 mt-4">
+        <p className="text-sm text-center text-gray-600 mt-6">
           Already have an account?{" "}
-          <Link href="/" className="text-blue-600 hover:underline">
+          <Link href="/" className="text-blue-600 hover:underline font-medium">
             Sign in
           </Link>
         </p>
