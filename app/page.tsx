@@ -1,54 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { setGuestUserCookie } from "lib/cookieHelpers";
+import { setGuestUserCookie } from "@/lib/cookieHelpers";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<string | null>(null);
-
-  // Listen to auth changes (login/logout) and update state
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUser(user);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user?.id) fetchUserRole(session.user.id);
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  const fetchUserRole = async (userId: string) => {
-    const { data: profileData, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
-
-    if (!error && profileData) {
-      setRole(profileData.role);
-      return profileData.role;
-    }
-    return null;
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       alert("Login failed: " + error.message);
       return;
@@ -56,23 +21,19 @@ export default function LoginPage() {
     router.push("/home");
   };
 
-  const handleAnonymousRegister = async () => {
+  const handleAnonymousRegister = () => {
     const guestUser = {
       id: `guest-${Date.now()}`,
       email: "guest@temporary.com",
-      role: "guest"
+      role: "guest",
     };
-  
     setGuestUserCookie(guestUser);
-    setUser(guestUser);
-    setRole("guest");
-    
     router.push("/home");
   };
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-md bg-white shadow-md rounded-2xl p-8">
-
         <h1 className="text-3xl font-bold text-center text-blue-700 mb-6">
           Biomedical Learning Platform
         </h1>
@@ -108,14 +69,16 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
             Log In
           </button>
 
           <button
             type="button"
             onClick={handleAnonymousRegister}
-            className="w-full bg-gray-600 text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors">
+            className="w-full bg-gray-600 text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors"
+          >
             Continue as Guest
           </button>
         </form>
@@ -126,7 +89,6 @@ export default function LoginPage() {
             Register
           </Link>
         </p>
-
       </div>
     </main>
   );

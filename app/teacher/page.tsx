@@ -11,13 +11,24 @@ import QuestionForm from "@/components/QuestionForm";
 interface HotspotAnswer { x: number; y: number; }
 type QuestionCorrectAnswer = string | string[] | HotspotAnswer[];
 interface QuizQuestion {
-  id: string; question_type: string; question_text: string; options: string[];
-  correct_answer: QuestionCorrectAnswer; display_order: number;
-  image_path?: string; image_url?: string;
+  id: string; 
+  question_type: string; 
+  question_text: string; 
+  options: string[];
+  correct_answer: QuestionCorrectAnswer; 
+  display_order: number;
+  image_path?: string; 
+  image_url?: string;
 }
 interface Quiz {
-  id: string; title: string; description?: string; question_ids: string[];
-  quiz_questions: QuizQuestion[]; created_at: string; updated_at: string; user_id: string;
+  id: string; 
+  title: string; 
+  description?: string; 
+  question_ids: string[];
+  quiz_questions: QuizQuestion[]; 
+  created_at: string; 
+  updated_at: string; 
+  user_id: string;
 }
 interface HardestQuestion {
   question_id: string;
@@ -36,12 +47,14 @@ interface QuizStatistics {
 
 // =============== MAIN COMPONENT ===============
 export default function AdminPage() {
-  const { logout } = useAuth();
+  const router = useRouter();
+  // ✅ Single useAuth() call
+  const { username, role, user, loading: authLoading, logout } = useAuth();
+
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [stats, setStats] = useState<QuizStatistics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const { username, role, user, loading: authLoading } = useAuth();
   const [formSearchTerm, setFormSearchTerm] = useState("");
   const [formsLoading, setFormsLoading] = useState(false);
   const [editingForm, setEditingForm] = useState<Quiz | null>(null);
@@ -53,10 +66,8 @@ export default function AdminPage() {
   // 🔍 Analytics filters
   const [viewMode, setViewMode] = useState<'general' | 'quiz' | 'student'>('general');
   const [selectedQuizId, setSelectedQuizId] = useState<string>('');
-  const [selectedUserName, setselectedUserName] = useState<string>('');
+  const [selectedUserName, setSelectedUserName] = useState<string>(''); // ✅ Fixed typo: setselectedUserName → setSelectedUserName
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-
-  const router = useRouter();
 
   // Access check
   useEffect(() => {
@@ -231,7 +242,7 @@ export default function AdminPage() {
           <Link href="/guide" className="text-gray-700 hover:text-blue-600">Guide</Link>
           <button onClick={async () => {
             await logout();
-            router.push("/");
+            window.location.href = "/"; // ✅ HARD REDIRECT
           }} className="text-gray-700 hover:text-blue-600">Sign Out</button>
         </div>
       </nav>
@@ -326,8 +337,8 @@ export default function AdminPage() {
                 <input
                   type="text"
                   placeholder="e.g., toluwani"
-                  value={selectedUserName} // still using same state, but now for username
-                  onChange={(e) => setselectedUserName(e.target.value.trim())}
+                  value={selectedUserName}
+                  onChange={(e) => setSelectedUserName(e.target.value.trim())} // ✅ Fixed typo
                   className="w-full p-2 border border-gray-300 rounded-md"
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -336,8 +347,6 @@ export default function AdminPage() {
               </div>
               </div>
             )}
-
-            {/* Optional: Add "Apply" button (auto-refresh on change is smoother) */}
 
             {/* Stats Display */}
             {analyticsLoading ? (

@@ -1,14 +1,12 @@
 'use client';
 
-
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 
 export default function HelpPage() {
+  const { username, role, logout } = useAuth(); // ✅ One call
   const router = useRouter();
-  const { logout } = useAuth();
-  const { username, role } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -18,14 +16,14 @@ export default function HelpPage() {
         <div className="flex gap-6 items-center">
           {username ? `${username}` : "Guest"}
           {role === 'admin' && (
-          <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-            Admin View
-          </Link>
+            <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
+              Admin View
+            </Link>
           )}
           {(role === 'teacher' || role === 'admin') && (
-          <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-            Teacher View
-          </Link>
+            <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
+              Teacher View
+            </Link>
           )}
           <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
             Home
@@ -33,9 +31,10 @@ export default function HelpPage() {
           <button
             onClick={async () => {
               await logout();
-              router.push("/");
+              window.location.href = "/"; // ✅ Hard redirect
             }}
-            className="text-gray-700 hover:text-blue-600 font-medium">
+            className="text-gray-700 hover:text-blue-600 font-medium"
+          >
             Sign Out
           </button>
         </div>
@@ -43,12 +42,15 @@ export default function HelpPage() {
 
       {/* Help content */}
       <div className="flex flex-col items-center mt-16 px-6">
+        <Link href="/home" className="text-blue-600 hover:underline mb-4">
+          ← Back to Home
+        </Link>
         <h2 className="text-3xl font-semibold mb-4">Help & Support</h2>
-        <p className="text-gray-700 mb-6">
+        <p className="text-gray-700 mb-6 text-center">
           This page provides guidance on how to use this website.
         </p>
 
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-2xl">
           <section>
             <h3 className="text-xl font-bold mb-2">📘 How to Use the Platform</h3>
             <ul className="list-disc ml-6 text-gray-700">

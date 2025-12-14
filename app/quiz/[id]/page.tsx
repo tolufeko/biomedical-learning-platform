@@ -150,8 +150,9 @@ export default function QuizPage() {
 
   // Save analytics to database
   const saveAnalytics = async (questionId: string, isCorrect: boolean, timeSpent: number) => {
-    console.log(user.id)
-    console.log(user.username)
+    // Skip if no user (shouldn't happen, but safe)
+    if (!user) return;
+
     try {
       await fetch('/api/quiz-analytics', {
         method: 'POST',
@@ -160,9 +161,10 @@ export default function QuizPage() {
         },
         body: JSON.stringify({
           question_id: questionId,
-          user_id: user.id,
+          user_id: user.id, // Works for both real and guest users
           correct: isCorrect,
           time_spent: Math.round(timeSpent / 1000), // Convert ms to seconds
+          is_guest: user.role === 'guest'
         }),
       });
     } catch (error) {
@@ -201,20 +203,6 @@ export default function QuizPage() {
       setQuestionStates(initialStates);
     }
   }, [questions.length]);
-
-  // Reset timer when question changes
-  useEffect(() => {
-    if (questionStates.length > 0 && currentQuestionIndex < questionStates.length) {
-      const newStates = [...questionStates];
-      if (!newStates[currentQuestionIndex].isSubmitted) {
-        newStates[currentQuestionIndex] = {
-          ...newStates[currentQuestionIndex],
-          startTime: Date.now()
-        };
-        setQuestionStates(newStates);
-      }
-    }
-  }, [currentQuestionIndex]);
 
   // Fetch quiz data
   useEffect(() => {
@@ -399,19 +387,31 @@ export default function QuizPage() {
 
   const goToNextQuestion = () => {
     if (currentQuestionIndex < totalQuestions - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
+      goToQuestion(currentQuestionIndex + 1);
     }
   };
 
   const goToPreviousQuestion = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
+      goToQuestion(currentQuestionIndex - 1);
     }
   };
 
   const goToQuestion = (index: number) => {
     if (index >= 0 && index < totalQuestions) {
       setCurrentQuestionIndex(index);
+      
+      // Reset timer immediately for the new question if not submitted
+      setQuestionStates(prev => {
+        const newStates = [...prev];
+        if (!newStates[index].isSubmitted) {
+          newStates[index] = {
+            ...newStates[index],
+            startTime: Date.now()
+          };
+        }
+        return newStates;
+      });
     }
   };
 

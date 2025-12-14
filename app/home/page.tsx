@@ -16,20 +16,50 @@ interface Quiz {
 
 export default function HomePage() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { username, role, logout } = useAuth(); // ✅ One call
+
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState(""); // <-- New state
-  const { username, role } = useAuth();
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // 🔁 Extract navbar to avoid duplication
+  const renderNavbar = () => (
+    <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
+      <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
+      <div className="flex gap-6 items-center">
+        {username ? `${username}` : "Guest"}
+        {role === 'admin' && (
+          <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
+            Admin View
+          </Link>
+        )}
+        {(role === 'teacher' || role === 'admin') && (
+          <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
+            Teacher View
+          </Link>
+        )}
+        <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
+          Guide
+        </Link>
+        <button
+          onClick={async () => {
+            await logout();
+            window.location.href = '/'; // ✅ Hard redirect
+          }}
+          className="text-gray-700 hover:text-blue-600 font-medium"
+        >
+          Sign Out
+        </button>
+      </div>
+    </nav>
+  );
 
   useEffect(() => {
     const fetchQuizzes = async () => {
       try {
         const response = await fetch('/api/quizzes');
-        if (!response.ok) {
-          throw new Error('Failed to fetch quizzes');
-        }
+        if (!response.ok) throw new Error('Failed to fetch quizzes');
         const data = await response.json();
         setQuizzes(data);
       } catch (error) {
@@ -39,48 +69,18 @@ export default function HomePage() {
         setLoading(false);
       }
     };
-
     fetchQuizzes();
   }, []);
 
-  // Filter quizzes based on search term (case-insensitive)
   const filteredQuizzes = quizzes.filter(quiz =>
     (quiz.title?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
     (quiz.description?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
   );
 
-  // Rest of your loading/error rendering stays the same...
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
-        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-          <div className="flex gap-6 items-center">
-            {username ? `${username}` : "Guest"}
-            {role === 'admin' && (
-              <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-                Admin View
-              </Link>
-            )}
-            {(role === 'teacher' || role === 'admin') && (
-              <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-                Teacher View
-              </Link>
-            )}
-            <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
-              Guide
-            </Link>
-            <button
-              onClick={async () => {
-                await logout();
-                router.push('/');
-              }}
-              className="text-gray-700 hover:text-blue-600 font-medium">
-              Sign Out
-            </button>
-          </div>
-        </nav>
+        {renderNavbar()}
         <main className="flex flex-col items-center justify-center mt-16 px-6">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -94,33 +94,7 @@ export default function HomePage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
-        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-          <div className="flex gap-6 items-center">
-            {username ? `${username}` : "Guest"}
-            {role === 'admin' && (
-              <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-                Admin View
-              </Link>
-            )}
-            {(role === 'teacher' || role === 'admin') && (
-              <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-                Teacher View
-              </Link>
-            )}
-            <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
-              Guide
-            </Link>
-            <button
-              onClick={async () => {
-                await logout();
-                router.push('/');
-              }}
-              className="text-gray-700 hover:text-blue-600 font-medium">
-              Sign Out
-            </button>
-          </div>
-        </nav>
+        {renderNavbar()}
         <main className="flex flex-col items-center justify-center mt-16 px-6">
           <div className="text-center text-red-600">
             <div className="text-lg mb-4">{error}</div>
@@ -135,46 +109,14 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* Navbar */}
-      <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-        <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-        <div className="flex gap-6 items-center">
-          {username ? `${username}` : "Guest"}
-          {role === 'admin' && (
-            <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-              Admin View
-            </Link>
-          )}
-          {(role === 'teacher' || role === 'admin') && (
-            <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-              Teacher View
-            </Link>
-          )}
-          <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
-            Guide
-          </Link>
-          <button
-            onClick={async () => {
-              await logout();
-              router.push('/');
-            }}
-            className="text-gray-700 hover:text-blue-600 font-medium">
-            Sign Out
-          </button>
-        </div>
-      </nav>
-
-      {/* Main Content */}
+      {renderNavbar()}
       <main className="flex flex-col items-center justify-center mt-8 px-6">
         <h2 className="text-3xl font-semibold mb-4 text-gray-800">
           Welcome to your Biomedical Learning Hub
         </h2>
-
         <p className="text-gray-700 mb-4 text-center">
           Please click on the subject area you wish to revise.
         </p>
-
-        {/* Search Bar */}
         <div className="w-full max-w-2xl mb-6">
           <input
             type="text"
@@ -184,7 +126,6 @@ export default function HomePage() {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
           {filteredQuizzes.map((quiz) => (
             <Card
@@ -211,8 +152,7 @@ export default function HomePage() {
             </Card>
           ))}
         </div>
-
-        {filteredQuizzes.length === 0 && !loading && (
+        {filteredQuizzes.length === 0 && (
           <div className="text-center text-gray-500 mt-8">
             <div className="text-lg mb-2">No subjects match your search</div>
             <p className="text-sm mb-4">Try a different keyword.</p>
