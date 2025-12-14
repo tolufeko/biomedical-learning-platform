@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { setGuestUserCookie } from "lib/cookieHelpers";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -61,14 +62,13 @@ export default function LoginPage() {
       email: "guest@temporary.com",
       role: "guest"
     };
-
-    sessionStorage.setItem('guestUser', JSON.stringify(guestUser));
+  
+    setGuestUserCookie(guestUser);
     setUser(guestUser);
     setRole("guest");
     
     router.push("/home");
   };
-
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-md bg-white shadow-md rounded-2xl p-8">

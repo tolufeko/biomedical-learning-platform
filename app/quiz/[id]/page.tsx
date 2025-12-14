@@ -1,9 +1,9 @@
 'use client';
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { signOut } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 
 // =============== TYPE DEFINITIONS ===============
@@ -101,6 +101,8 @@ interface QuestionState {
 // =============== MAIN COMPONENT ===============
 
 export default function QuizPage() {
+  const router = useRouter();
+  const { logout } = useAuth();
   const { id } = useParams();
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -599,7 +601,10 @@ export default function QuizPage() {
             <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
               Guide
             </Link>
-            <button onClick={signOut} className="text-gray-700 hover:text-blue-600 font-medium">
+            <button onClick={async () => {
+              await logout();
+              router.push('/');
+            }} className="text-gray-700 hover:text-blue-600 font-medium">
               Sign Out
             </button>
           </div>
@@ -737,7 +742,10 @@ export default function QuizPage() {
           <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
             Guide
           </Link>
-          <button onClick={signOut} className="text-gray-700 hover:text-blue-600 font-medium">
+          <button onClick={async () => {
+              await logout();
+              router.push('/');
+            }} className="text-gray-700 hover:text-blue-600 font-medium">
             Sign Out
           </button>
         </div>

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
-import { signOut } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 
 interface UserProfile {
@@ -16,6 +15,7 @@ interface UserProfile {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -177,7 +177,10 @@ export default function AdminDashboard() {
             Guide
           </Link>
           <button
-            onClick={signOut}
+            onClick={async () => {
+              await logout();
+              router.push("/");
+            }}
             className="text-gray-700 hover:text-blue-600 font-medium">
             Sign Out
           </button>

@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { signOut } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
 
@@ -37,6 +36,7 @@ interface QuizStatistics {
 
 // =============== MAIN COMPONENT ===============
 export default function AdminPage() {
+  const { logout } = useAuth();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [stats, setStats] = useState<QuizStatistics | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -229,7 +229,10 @@ export default function AdminPage() {
           {role === 'admin' && <Link href="/admin" className="text-gray-700 hover:text-blue-600">Admin View</Link>}
           <Link href="/home" className="text-gray-700 hover:text-blue-600">Home</Link>
           <Link href="/guide" className="text-gray-700 hover:text-blue-600">Guide</Link>
-          <button onClick={signOut} className="text-gray-700 hover:text-blue-600">Sign Out</button>
+          <button onClick={async () => {
+            await logout();
+            router.push("/");
+          }} className="text-gray-700 hover:text-blue-600">Sign Out</button>
         </div>
       </nav>
 

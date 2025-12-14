@@ -1,10 +1,13 @@
 'use client';
 
+
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signOut } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 
 export default function HelpPage() {
+  const router = useRouter();
+  const { logout } = useAuth();
   const { username, role } = useAuth();
 
   return (
@@ -28,7 +31,10 @@ export default function HelpPage() {
             Home
           </Link>
           <button
-            onClick={signOut}
+            onClick={async () => {
+              await logout();
+              router.push("/");
+            }}
             className="text-gray-700 hover:text-blue-600 font-medium">
             Sign Out
           </button>

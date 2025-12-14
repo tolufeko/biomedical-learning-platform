@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 
 interface Quiz {
@@ -17,6 +16,7 @@ interface Quiz {
 
 export default function HomePage() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +72,10 @@ export default function HomePage() {
               Guide
             </Link>
             <button
-              onClick={signOut}
+              onClick={async () => {
+                await logout();
+                router.push('/');
+              }}
               className="text-gray-700 hover:text-blue-600 font-medium">
               Sign Out
             </button>
@@ -109,7 +112,10 @@ export default function HomePage() {
               Guide
             </Link>
             <button
-              onClick={signOut}
+              onClick={async () => {
+                await logout();
+                router.push('/');
+              }}
               className="text-gray-700 hover:text-blue-600 font-medium">
               Sign Out
             </button>
@@ -148,7 +154,10 @@ export default function HomePage() {
             Guide
           </Link>
           <button
-            onClick={signOut}
+            onClick={async () => {
+              await logout();
+              router.push('/');
+            }}
             className="text-gray-700 hover:text-blue-600 font-medium">
             Sign Out
           </button>
