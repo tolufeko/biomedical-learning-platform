@@ -31,7 +31,7 @@ export default function HelpPage() {
           <button
             onClick={async () => {
               await logout();
-              window.location.href = "/"; // ✅ Hard redirect
+              window.location.href = "/"; 
             }}
             className="text-gray-700 hover:text-blue-600 font-medium"
           >
@@ -42,9 +42,6 @@ export default function HelpPage() {
 
       {/* Help content */}
       <div className="flex flex-col items-center mt-16 px-6">
-        <Link href="/home" className="text-blue-600 hover:underline mb-4">
-          ← Back to Home
-        </Link>
         <h2 className="text-3xl font-semibold mb-4">Help & Support</h2>
         <p className="text-gray-700 mb-6 text-center">
           This page provides guidance on how to use this website.
