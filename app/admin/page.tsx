@@ -111,7 +111,7 @@ export default function AdminDashboard() {
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">
-          {username || "Guest"}]
+          {username || "Guest"}
           <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
             Teacher View
           </Link>
