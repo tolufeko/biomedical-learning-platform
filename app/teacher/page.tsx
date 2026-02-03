@@ -62,11 +62,12 @@ export default function AdminPage() {
   const [resetFormKey, setResetFormKey] = useState(0);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showQuizzesList, setShowQuizzesList] = useState(false);
+  const [showAnalyticsForm, setShowAnalyticsForm] = useState(false);
   
   // 🔍 Analytics filters
   const [viewMode, setViewMode] = useState<'general' | 'quiz' | 'student'>('general');
   const [selectedQuizId, setSelectedQuizId] = useState<string>('');
-  const [selectedUserName, setSelectedUserName] = useState<string>(''); // ✅ Fixed typo: setselectedUserName → setSelectedUserName
+  const [selectedUserName, setSelectedUserName] = useState<string>('');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // Access check
@@ -272,126 +273,136 @@ export default function AdminPage() {
         </div>
 
         {/* 🔍 ANALYTICS CONTROLS */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Performance Analytics</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* View Selector */}
-            <div className="flex flex-wrap gap-4 mb-6">
-              <button
-                onClick={() => setViewMode('general')}
-                className={`px-4 py-2 rounded-lg font-medium ${
-                  viewMode === 'general'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                All Students & Quizzes
-              </button>
-              <button
-                onClick={() => setViewMode('quiz')}
-                className={`px-4 py-2 rounded-lg font-medium ${
-                  viewMode === 'quiz'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Specific Quiz
-              </button>
-              <button
-                onClick={() => setViewMode('student')}
-                className={`px-4 py-2 rounded-lg font-medium ${
-                  viewMode === 'student'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Specific Student
-              </button>
-            </div>
+        <div className="mb-8">
+          <button
+            onClick={() => setShowAnalyticsForm(!showAnalyticsForm)}
+            className="w-full text-left px-4 py-3 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100"
+          >
+            {showAnalyticsForm ? 'Hide Analytics' : 'View Analytics'}
+          </button>
+          {showAnalyticsForm && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Performance Analytics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* View Selector */}
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <button
+                    onClick={() => setViewMode('general')}
+                    className={`px-4 py-2 rounded-lg font-medium ${
+                      viewMode === 'general'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    All Students & Quizzes
+                  </button>
+                  <button
+                    onClick={() => setViewMode('quiz')}
+                    className={`px-4 py-2 rounded-lg font-medium ${
+                      viewMode === 'quiz'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Specific Quiz
+                  </button>
+                  <button
+                    onClick={() => setViewMode('student')}
+                    className={`px-4 py-2 rounded-lg font-medium ${
+                      viewMode === 'student'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Specific Student
+                  </button>
+                </div>
 
-            {/* Conditional Inputs */}
-            {viewMode === 'quiz' && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Quiz</label>
-                <select
-                  value={selectedQuizId}
-                  onChange={(e) => setSelectedQuizId(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">-- Choose a quiz --</option>
-                  {quizzes.map(quiz => (
-                    <option key={quiz.id} value={quiz.id}>{quiz.title}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {viewMode === 'student' && (
-              <div className="mb-4 space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Student Username
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., toluwani"
-                  value={selectedUserName}
-                  onChange={(e) => setSelectedUserName(e.target.value.trim())} // ✅ Fixed typo
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Enter the student's username (not user ID)
-                </p>
-              </div>
-              </div>
-            )}
-
-            {/* Stats Display */}
-            {analyticsLoading ? (
-              <div className="text-center py-6 text-gray-600">Loading analytics...</div>
-            ) : stats ? (
-              <div className="mt-6">
-                {stats.data_available ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-blue-50 p-4 rounded-lg text-center">
-                      <p className="text-sm text-gray-600">Avg. Score</p>
-                      <p className="text-2xl font-bold text-blue-700">{stats.average_score}%</p>
-                    </div>
-                    <div className="bg-green-50 p-4 rounded-lg text-center">
-                      <p className="text-sm text-gray-600">Avg. Time (sec)</p>
-                      <p className="text-2xl font-bold text-green-700">{stats.average_time_spent}</p>
-                    </div>
-                    <div className="bg-purple-50 p-4 rounded-lg text-center">
-                      <p className="text-sm text-gray-600">Total Attempts</p>
-                      <p className="text-2xl font-bold text-purple-700">{stats.total_attempts}</p>
-                    </div>
-                    <div className="bg-red-50 p-4 rounded-lg text-center">
-                    {stats?.highest_error_question ? (
-                      <>
-                        <p className="text-sm text-gray-600">Hardest Question</p>
-                        <p className="text-xs font-medium text-gray-800 mt-1 line-clamp-2">
-                          "{stats.highest_error_question.question_text}"
-                        </p>
-                        <p className="text-sm mt-2 text-red-700 font-bold">
-                          {stats.highest_error_question.error_rate}% error
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-gray-500">No question data</p>
-                    )}
-                  </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-gray-500">
-                    No analytics data available for this selection.
+                {/* Conditional Inputs */}
+                {viewMode === 'quiz' && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Quiz</label>
+                    <select
+                      value={selectedQuizId}
+                      onChange={(e) => setSelectedQuizId(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                    >
+                      <option value="">-- Choose a quiz --</option>
+                      {quizzes.map(quiz => (
+                        <option key={quiz.id} value={quiz.id}>{quiz.title}</option>
+                      ))}
+                    </select>
                   </div>
                 )}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+
+                {viewMode === 'student' && (
+                  <div className="mb-4 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Student Username
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., toluwani"
+                      value={selectedUserName}
+                      onChange={(e) => setSelectedUserName(e.target.value.trim())} // ✅ Fixed typo
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter the student's username (not user ID)
+                    </p>
+                  </div>
+                  </div>
+                )}
+
+                {/* Stats Display */}
+                {analyticsLoading ? (
+                  <div className="text-center py-6 text-gray-600">Loading analytics...</div>
+                ) : stats ? (
+                  <div className="mt-6">
+                    {stats.data_available ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="bg-blue-50 p-4 rounded-lg text-center">
+                          <p className="text-sm text-gray-600">Avg. Score</p>
+                          <p className="text-2xl font-bold text-blue-700">{stats.average_score}%</p>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg text-center">
+                          <p className="text-sm text-gray-600">Avg. Time (sec)</p>
+                          <p className="text-2xl font-bold text-green-700">{stats.average_time_spent}</p>
+                        </div>
+                        <div className="bg-purple-50 p-4 rounded-lg text-center">
+                          <p className="text-sm text-gray-600">Total Attempts</p>
+                          <p className="text-2xl font-bold text-purple-700">{stats.total_attempts}</p>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg text-center">
+                        {stats?.highest_error_question ? (
+                          <>
+                            <p className="text-sm text-gray-600">Hardest Question</p>
+                            <p className="text-xs font-medium text-gray-800 mt-1 line-clamp-2">
+                              "{stats.highest_error_question.question_text}"
+                            </p>
+                            <p className="text-sm mt-2 text-red-700 font-bold">
+                              {stats.highest_error_question.error_rate}% error
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-500">No question data</p>
+                        )}
+                      </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-gray-500">
+                        No analytics data available for this selection.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Rest of UI: Create Quiz & Quizzes List (unchanged) */}
         <div className="mb-8">
@@ -414,7 +425,7 @@ export default function AdminPage() {
         <div>
           <button
             onClick={() => setShowQuizzesList(!showQuizzesList)}
-            className="w-full text-left px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
+            className="w-full text-left px-4 py-3 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100"
           >
             {showQuizzesList ? 'Hide Your Quizzes' : 'View Your Quizzes'}
           </button>
