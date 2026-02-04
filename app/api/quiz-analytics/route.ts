@@ -12,10 +12,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { question_id, user_id, correct, time_spent } = body;
 
-    // Validate all required fields, including user_id
     if (
       !question_id ||
-      !user_id || // ✅ now required
+      !user_id ||
       typeof correct !== 'boolean' ||
       typeof time_spent !== 'number'
     ) {
@@ -29,10 +28,10 @@ export async function POST(request: Request) {
     }
 
     const { data, error } = await supabase
-      .from('quiz_analytics')
+      .from('analytics')
       .insert({
         question_id,
-        user_id, // ✅ use the one sent from client
+        user_id,
         correct,
         time_spent,
       })
@@ -55,11 +54,20 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
+    const questionId = searchParams.get('question_id');
 
-    let query = supabase.from('quiz_analytics').select('*');
+    let query = supabase.from('analytics').select(`
+      *,
+      questions (question_text, question_type),
+      profiles (username)
+    `);
 
     if (userId) {
       query = query.eq('user_id', userId);
+    }
+
+    if (questionId) {
+      query = query.eq('question_id', questionId);
     }
 
     const { data, error } = await query;

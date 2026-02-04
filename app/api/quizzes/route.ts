@@ -9,28 +9,56 @@ const supabase = createClient(
 
 export async function GET() {
   try {
-    const { data: forms, error } = await supabase
+    // ✅ Fixed: Correct destructuring
+    const { data: quizzes, error: quizzesError } = await supabase
       .from("quiz")
       .select(`
         *,
-        quiz_questions (
-          id,
-          question_type,
-          question_text,
-          options,
-          correct_answer,
-          image_path,
-          display_order
-        )
+        profiles (username, email)
       `)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Supabase GET error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (quizzesError) {
+      console.error("Supabase GET error:", quizzesError);
+      return NextResponse.json({ error: quizzesError.message }, { status: 500 });
     }
 
-    return NextResponse.json(forms || []);
+    // For each quiz, fetch its questions via junction table
+    const quizzesWithQuestions = await Promise.all(
+      quizzes.map(async (quiz: any) => {
+        // ✅ Fixed: Correct destructuring
+        const { data: assignments, error: assignError } = await supabase
+          .from('question_assignments')
+          .select(`
+            display_order,
+            questions (
+              id,
+              question_type,
+              question_text,
+              options,
+              correct_answer,
+              image_path
+            )
+          `)
+          .eq('quiz_id', quiz.id)
+          .order('display_order', { ascending: true });
+
+        if (assignError) {
+          console.error(`Error fetching questions for quiz ${quiz.id}:`, assignError);
+          return { ...quiz, questions: [] };
+        }
+
+        return {
+          ...quiz,
+          questions: assignments?.map(a => ({
+            ...a.questions,
+            display_order: a.display_order
+          })) || []
+        };
+      })
+    );
+
+    return NextResponse.json(quizzesWithQuestions);
 
   } catch (err: any) {
     console.error("API GET error:", err);
@@ -43,9 +71,9 @@ export async function POST(request: Request) {
     const formData = await request.json();
     const { title, questions, description, userId } = formData;
 
-    if (!title || !questions) {
+    if (!title || !questions || !Array.isArray(questions)) {
       return NextResponse.json(
-        { error: "Title and questions are required" },
+        { error: "Title and questions array are required" },
         { status: 400 }
       );
     }
@@ -57,138 +85,137 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create the form first
-    const { data: form, error: formError } = await supabase
+    // Create the quiz first
+    // ✅ Fixed: Correct destructuring
+    const { data: quizData, error: quizError } = await supabase
       .from("quiz")
       .insert([
         {
           title,
           description: description || null,
-          question_ids: [],
           user_id: userId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
         }
       ])
       .select()
       .single();
 
-    if (formError) {
-      console.error("Supabase form creation error:", formError);
+    if (quizError) {
+      console.error("Supabase quiz creation error:", quizError);
       return NextResponse.json({ 
-        error: `Failed to create form: ${formError.message}`,
-        details: formError 
+        error: `Failed to create quiz: ${quizError.message}`
       }, { status: 500 });
     }
 
-    console.log("Form created:", form.id);
+    const quiz = quizData;
+    console.log("Quiz created:", quiz.id);
 
-    // Insert questions into quiz_questions table
-    const formQuestions = questions.map((q: any, index: number) => {
-      let correctAnswer = q.correctAnswer;
+    // Process each question: reuse existing or create new
+    const assignmentData = [];
+    
+    for (let [index, q] of questions.entries()) {
+      let questionId: string;
+      
+      // Check if question already exists (exact match on text + type)
+      const { data: existingQuestion, error: checkError } = await supabase
+        .from('questions')
+        .select('id')
+        .eq('question_text', q.question)
+        .eq('question_type', q.type)
+        .single();
 
-      // Handle correctAnswer based on question type
-      if (q.type === 'text') {
-        // Keep as string (or convert to string if needed)
-        correctAnswer = typeof correctAnswer === 'string' 
-          ? correctAnswer 
-          : String(correctAnswer);
-      } else if (
-        q.type === 'multiple-choice' || 
-        q.type === 'checkbox' || 
-        q.type === 'hotspot'
-      ) {
-        // Ensure it's an array
-        if (!Array.isArray(correctAnswer)) {
-          correctAnswer = [correctAnswer];
-        }
+      if (existingQuestion) {
+        // Reuse existing question
+        questionId = existingQuestion.id;
+        console.log(`Reusing existing question: ${questionId}`);
       } else {
-        // Fallback: preserve as-is (or log warning)
-        console.warn(`Unknown question type: ${q.type}, correctAnswer:`, correctAnswer);
+        // Create new question in master bank
+        let correctAnswer = q.correctAnswer;
+
+        if (q.type === 'text') {
+          correctAnswer = typeof correctAnswer === 'string' 
+            ? correctAnswer 
+            : String(correctAnswer);
+        } else if (
+          q.type === 'multiple-choice' || 
+          q.type === 'checkbox' || 
+          q.type === 'hotspot'
+        ) {
+          if (!Array.isArray(correctAnswer)) {
+            correctAnswer = [correctAnswer];
+          }
+        }
+
+        const { data: newQuestionData, error: qError } = await supabase
+          .from('questions')
+          .insert([{
+            question_type: q.type,
+            question_text: q.question,
+            options: q.options || null,
+            correct_answer: correctAnswer,
+            image_path: q.image_path || null,
+          }])
+          .select('id')
+          .single();
+
+        if (qError) throw qError;
+        const newQuestion = newQuestionData;
+        questionId = newQuestion.id;
+        console.log(`Created new question: ${questionId}`);
       }
 
-      return {
-        form_id: form.id,
-        question_type: q.type,
-        question_text: q.question,
-        options: q.options,
-        correct_answer: correctAnswer, // ✅ string for text, array for others
-        image_path: q.image_path || null,
+      // Create assignment (link quiz ↔ question)
+      assignmentData.push({
+        quiz_id: quiz.id,
+        question_id: questionId,
         display_order: index,
-      };
-    });
-
-    console.log("Inserting questions:", formQuestions);
-
-    const { data: insertedQuestions, error: questionsError } = await supabase
-      .from("quiz_questions")
-      .insert(formQuestions)
-      .select('id');
-
-    if (questionsError) {
-      console.error("Supabase questions insertion error:", questionsError);
-      // Clean up: delete the form if questions fail
-      await supabase.from("quiz").delete().eq("id", form.id);
-      return NextResponse.json({ 
-        error: `Failed to create questions: ${questionsError.message}`,
-        details: questionsError 
-      }, { status: 500 });
+      });
     }
 
-    console.log("Questions inserted:", insertedQuestions);
+    // Bulk insert all assignments
+    const { error: assignError } = await supabase
+      .from('question_assignments')
+      .insert(assignmentData);
 
-    // Update the form with question IDs
-    const questionIds = insertedQuestions.map(q => q.id);
-    const { error: updateError } = await supabase
-      .from("quiz")
-      .update({ 
-        question_ids: questionIds,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", form.id);
-
-    if (updateError) {
-      console.error("Supabase form update error:", updateError);
-      return NextResponse.json({ 
-        error: `Failed to update form with question IDs: ${updateError.message}`,
-        details: updateError 
-      }, { status: 500 });
+    if (assignError) {
+      console.error("Assignment insertion error:", assignError);
+      // Clean up: delete quiz if assignments fail
+      await supabase.from('quiz').delete().eq('id', quiz.id);
+      throw assignError;
     }
 
-    // Fetch the complete form with questions
-    const { data: completeForm, error: completeError } = await supabase
-      .from("quiz")
+    console.log("Assignments created:", assignmentData.length);
+
+    // Fetch complete quiz with questions
+    const { data: assignments } = await supabase
+      .from('question_assignments')
       .select(`
-        *,
-        quiz_questions (
+        display_order,
+        questions (
           id,
           question_type,
           question_text,
           options,
           correct_answer,
-          image_path,
-          display_order
+          image_path
         )
       `)
-      .eq("id", form.id)
-      .single();
+      .eq('quiz_id', quiz.id)
+      .order('display_order', { ascending: true });
 
-    if (completeError) {
-      console.error("Supabase complete form fetch error:", completeError);
-      return NextResponse.json({ 
-        error: `Failed to fetch complete form: ${completeError.message}`,
-        details: completeError 
-      }, { status: 500 });
-    }
+    const quizWithQuestions = {
+      ...quiz,
+      questions: assignments?.map(a => ({
+        ...a.questions,
+        display_order: a.display_order
+      })) || []
+    };
 
-    console.log("Complete form fetched:", completeForm);
-    return NextResponse.json(completeForm);
+    return NextResponse.json(quizWithQuestions);
 
   } catch (err: any) {
     console.error("API POST error:", err);
     return NextResponse.json({ 
-      error: `Internal server error: ${err.message}`,
-      details: err 
+      error: `Internal server error: ${err.message}`
     }, { status: 500 });
   }
 }

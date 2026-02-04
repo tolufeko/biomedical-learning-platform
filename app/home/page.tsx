@@ -1,3 +1,4 @@
+// app/home/page.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -7,16 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
 
+// ✅ Fixed: Changed quiz_questions to questions
 interface Quiz {
   id: string;
   title: string;
   description: string;
-  quiz_questions: any[];
+  questions: any[]; // ✅ Changed from quiz_questions
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export default function HomePage() {
   const router = useRouter();
-  const { username, role, logout } = useAuth(); // ✅ One call
+  const { username, role, logout } = useAuth();
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +50,7 @@ export default function HomePage() {
         <button
           onClick={async () => {
             await logout();
-            window.location.href = '/'; // ✅ Hard redirect
+            window.location.href = '/';
           }}
           className="text-gray-700 hover:text-blue-600 font-medium"
         >
@@ -59,12 +64,19 @@ export default function HomePage() {
     const fetchQuizzes = async () => {
       try {
         const response = await fetch('/api/quizzes');
-        if (!response.ok) throw new Error('Failed to fetch quizzes');
+        
+        // ✅ Better error handling
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('Quizzes loaded:', data); // ✅ Debug log
         setQuizzes(data);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching quizzes:', error);
-        setError('Failed to load subjects. Please try again.');
+        setError(error.message || 'Failed to load subjects. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -137,7 +149,8 @@ export default function HomePage() {
                 <CardTitle className="text-lg flex justify-between items-start">
                   <span>{quiz.title}</span>
                   <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {quiz.quiz_questions?.length || 0} Qs
+                    {/* ✅ Fixed: Changed quiz_questions to questions */}
+                    {quiz.questions?.length || 0} Qs
                   </span>
                 </CardTitle>
               </CardHeader>
@@ -146,7 +159,8 @@ export default function HomePage() {
                   {quiz.description || "No description available"}
                 </p>
                 <div className="text-xs text-gray-500">
-                  {quiz.quiz_questions?.length || 0} question{quiz.quiz_questions?.length !== 1 ? 's' : ''}
+                  {/* ✅ Fixed: Changed quiz_questions to questions */}
+                  {quiz.questions?.length || 0} question{quiz.questions?.length !== 1 ? 's' : ''}
                 </div>
               </CardContent>
             </Card>

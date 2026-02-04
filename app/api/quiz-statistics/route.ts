@@ -11,8 +11,8 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
-    const username = searchParams.get('username'); // ✅ new
-    const quizId = searchParams.get('quiz_id'); // = form_id
+    const username = searchParams.get('username');
+    const quizId = searchParams.get('quiz_id');
 
     // Resolve username → user_id if needed
     let resolvedUserId = userId;
@@ -25,7 +25,6 @@ export async function GET(request: Request) {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No user found
           return NextResponse.json({
             average_score: 0,
             average_time_spent: 0,
@@ -42,20 +41,20 @@ export async function GET(request: Request) {
     let analyticsData: any[] = [];
 
     if (quizId) {
-      // Get all question_ids and their question_text for this quiz (form_id)
-      const { data: questions, error: qError } = await supabase
-        .from('quiz_questions')
-        .select('id, question_text')
-        .eq('form_id', quizId);
+      // Get all question_ids for this quiz via junction table
+      const { data: assignments, error: assignError } = await supabase
+        .from('question_assignments')
+        .select('question_id')
+        .eq('quiz_id', quizId);
 
-      if (qError) throw qError;
+      if (assignError) throw assignError;
 
-      if (questions.length === 0) {
+      if (assignments.length === 0) {
         analyticsData = [];
       } else {
-        const questionIds = questions.map(q => q.id);
+        const questionIds = assignments.map(a => a.question_id);
         let query = supabase
-          .from('quiz_analytics')
+          .from('analytics')
           .select('*')
           .in('question_id', questionIds);
 
@@ -68,8 +67,8 @@ export async function GET(request: Request) {
         analyticsData = data;
       }
     } else {
-      // General or per-user (no quiz filter)
-      let query = supabase.from('quiz_analytics').select('*');
+      // General or per-user stats (no quiz filter)
+      let query = supabase.from('analytics').select('*');
       if (resolvedUserId) {
         query = query.eq('user_id', resolvedUserId);
       }
@@ -88,28 +87,18 @@ export async function GET(request: Request) {
       });
     }
 
-    // Build question text map: question_id → question_text
+    // Build question text map
     const questionTextMap: Record<string, string> = {};
-    if (quizId) {
-      // We already fetched questions above
+    const questionIds = [...new Set(analyticsData.map(a => a.question_id))];
+    
+    if (questionIds.length > 0) {
       const { data: questions } = await supabase
-        .from('quiz_questions')
+        .from('questions')
         .select('id, question_text')
-        .eq('form_id', quizId);
+        .in('id', questionIds);
+      
       for (const q of questions) {
         questionTextMap[q.id] = q.question_text;
-      }
-    } else {
-      // For general stats, we need to fetch all distinct question texts used
-      const questionIds = [...new Set(analyticsData.map(a => a.question_id))];
-      if (questionIds.length > 0) {
-        const { data: questions } = await supabase
-          .from('quiz_questions')
-          .select('id, question_text')
-          .in('id', questionIds);
-        for (const q of questions) {
-          questionTextMap[q.id] = q.question_text;
-        }
       }
     }
 
