@@ -15,6 +15,8 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [guestLoading, setGuestLoading] = useState(false);
+  const [error, setError] = useState<string>("");
+
 
   useEffect(() => {
     if (!loading && user) {
@@ -34,12 +36,15 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      alert("Invalid email or password");
-      console.error("Login error:", error);
+    setError("");
+    
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (authError) {
+      setError("Invalid email or password");
       return;
     }
+    
     router.push("/home");
   };
 
@@ -100,6 +105,12 @@ export default function LoginPage() {
         <h1 className="text-3xl font-bold text-center text-blue-700 mb-6">
           Biomedical Learning Platform
         </h1>
+
+        {error && (
+          <div className="text-red-500 text-sm mt-2 text-center">
+            {error}
+          </div>
+        )}
 
         {!showResetForm ? (
           <>
