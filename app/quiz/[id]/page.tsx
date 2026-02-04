@@ -41,6 +41,7 @@ interface BaseQuizQuestion {
   question_text: string;
   image_path?: string;
   image_url?: string;
+  question_assignment_id: string;
 }
 
 interface TextQuestion extends BaseQuizQuestion {
@@ -152,25 +153,27 @@ export default function QuizPage() {
   };
 
   // Save analytics to database
-  const saveAnalytics = async (questionId: string, isCorrect: boolean, timeSpent: number) => {
-    // Skip if no user (shouldn't happen, but safe)
-    if (!user) return;
+  const saveAnalytics = async (questionAssignmentId: string, isCorrect: boolean, timeSpent: number) => {
+    if (!user || role === 'guest') return; // ✅ Skip guests
+
+    // ✅ VALIDATE assignment ID exists
+    if (!questionAssignmentId) {
+      console.warn('Missing question_assignment_id, skipping analytics');
+      return;
+    }
 
     try {
       await fetch('/api/quiz-analytics', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question_id: questionId,
+          question_assignment_id: questionAssignmentId, // ✅ CHANGED FIELD NAME
           correct: isCorrect,
           time_spent: Math.round(timeSpent / 1000),
         }),
       });
     } catch (error) {
       console.error('Error saving analytics:', error);
-      // Don't block user flow if analytics fail
     }
   };
 
@@ -424,13 +427,19 @@ export default function QuizPage() {
       const question = questions[i];
       const state = newStates[i];
   
+      // ✅ VALIDATE question_assignment_id exists before saving
+      if (!question.question_assignment_id) {
+        console.error(`Question ${i} missing question_assignment_id!`);
+        continue;
+      }
+  
       if (!state.isSubmitted && hasUserAnswer(state)) {
         const isCorrect = gradeQuestion(question, state);
         const timeSpent = Date.now() - state.startTime;
         
-        // Save analytics
-        await saveAnalytics(question.id, isCorrect, timeSpent);
-
+        // ✅ PASS question_assignment_id INSTEAD OF question.id
+        await saveAnalytics(question.question_assignment_id, isCorrect, timeSpent);
+  
         newStates[i] = {
           ...state,
           isSubmitted: true,
@@ -441,9 +450,9 @@ export default function QuizPage() {
       } else if (!state.isSubmitted) {
         const timeSpent = Date.now() - state.startTime;
         
-        // Save analytics for unanswered questions
-        await saveAnalytics(question.id, false, timeSpent);
-
+        // ✅ PASS question_assignment_id FOR UNANSWERED QUESTIONS TOO
+        await saveAnalytics(question.question_assignment_id, false, timeSpent);
+  
         newStates[i] = {
           ...state,
           isSubmitted: true,

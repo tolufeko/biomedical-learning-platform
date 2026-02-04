@@ -3,7 +3,6 @@ import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 
-// Admin client for database operations (Service Role Key)
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -19,37 +18,37 @@ export async function POST(request: Request) {
       { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
     );
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const userData = await supabase.auth.getUser();
+    const user = userData.data?.user;
 
-    // ✅ VERIFY USER IS LOGGED IN
-    if (authError || !user) {
+    if (userData.error || !user) {
       return NextResponse.json(
         { error: 'Unauthorized: Login required' },
         { status: 401 }
       );
     }
 
-    // ✅ PARSE REQUEST BODY (NO user_id!)
-    const { question_id, correct, time_spent } = await request.json();
+    // ✅ PARSE REQUEST BODY (NOW INCLUDES question_assignment_id)
+    const { question_assignment_id, correct, time_spent } = await request.json();
 
     // ✅ VALIDATE REQUIRED FIELDS
     if (
-      !question_id ||
+      !question_assignment_id ||
       typeof correct !== 'boolean' ||
       typeof time_spent !== 'number'
     ) {
       return NextResponse.json(
-        { error: 'Missing required fields: question_id, correct, time_spent' },
+        { error: 'Missing required fields: question_assignment_id, correct, time_spent' },
         { status: 400 }
       );
     }
 
-    // ✅ INSERT ANALYTICS WITH VERIFIED USER_ID FROM SESSION
+    // ✅ INSERT ANALYTICS WITH QUESTION_ASSIGNMENT_ID
     const { data, error } = await supabaseAdmin
       .from('analytics')
       .insert({
-        question_id,
-        user_id: user.id, // ✅ TRUSTED FROM VERIFIED SESSION
+        question_assignment_id, // ✅ NEW: Links to specific quiz+question context
+        user_id: user.id,
         correct,
         time_spent,
       })
@@ -78,11 +77,14 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
-    const questionId = searchParams.get('question_id');
+    const questionAssignmentId = searchParams.get('question_assignment_id');
 
     let query = supabaseAdmin.from('analytics').select(`
       *,
-      questions (question_text, question_type),
+      question_assignments (
+        quiz_id,
+        questions (question_text, question_type)
+      ),
       profiles (username)
     `);
 
@@ -90,8 +92,8 @@ export async function GET(request: Request) {
       query = query.eq('user_id', userId);
     }
 
-    if (questionId) {
-      query = query.eq('question_id', questionId);
+    if (questionAssignmentId) {
+      query = query.eq('question_assignment_id', questionAssignmentId);
     }
 
     const { data, error } = await query;

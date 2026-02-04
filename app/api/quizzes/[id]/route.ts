@@ -43,7 +43,6 @@ export async function GET(
       return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
-    // Fetch quiz details
     const quizResult = await supabaseAdmin
       .from("quiz")
       .select(`
@@ -61,10 +60,10 @@ export async function GET(
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
-    // Fetch questions via junction table
     const assignmentsResult = await supabaseAdmin
       .from('question_assignments')
       .select(`
+        id,
         display_order,
         questions (
           id,
@@ -85,10 +84,10 @@ export async function GET(
 
     const questions = assignmentsResult.data?.map(a => ({
       ...a.questions,
-      display_order: a.display_order
+      display_order: a.display_order,
+      question_assignment_id: a.id
     })) || [];
 
-    // Generate signed URLs for hotspot images
     const questionsWithImages = await Promise.all(
       questions.map(async (q: any) => {
         if (q.question_type === 'hotspot' && q.image_path) {
@@ -304,10 +303,11 @@ export async function PUT(
       }
     }
 
-    // Fetch updated quiz with questions
+    // Fetch updated quiz with questions (include assignment ID)
     const assignmentsResult = await supabaseAdmin
       .from('question_assignments')
       .select(`
+        id,
         display_order,
         questions (
           id,
@@ -323,11 +323,13 @@ export async function PUT(
 
     if (assignmentsResult.error) throw assignmentsResult.error;
 
+    // Include question_assignment_id in response
     const quizWithQuestions = {
       ...updateResult.data,
       questions: assignmentsResult.data?.map(a => ({
         ...a.questions,
-        display_order: a.display_order
+        display_order: a.display_order,
+        question_assignment_id: a.id
       })) || []
     };
 
