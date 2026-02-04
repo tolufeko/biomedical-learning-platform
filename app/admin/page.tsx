@@ -1,8 +1,8 @@
+// app/admin/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -15,7 +15,7 @@ interface UserProfile {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { username, role, user, logout } = useAuth(); // ✅ All in one
+  const { username, role, user, logout } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -26,10 +26,7 @@ export default function AdminDashboard() {
 
   // ✅ Use global auth state for access control
   useEffect(() => {
-    if (role === null) {
-      // Still loading
-      return;
-    }
+    if (role === null) return;
     if (role !== "admin") {
       router.push("/home");
       return;
@@ -43,7 +40,7 @@ export default function AdminDashboard() {
     if (!user) return;
 
     const filtered = users
-      .filter(u => u.id !== user.id) // Exclude current admin
+      .filter(u => u.id !== user.id)
       .filter(u =>
         u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -53,15 +50,14 @@ export default function AdminDashboard() {
     setFilteredUsers(filtered);
   }, [searchTerm, users, user]);
 
+  // ✅ Use API route instead of direct Supabase client
   const fetchUsers = async () => {
     try {
       setMessage("");
-      const { data: profiles, error } = await supabase
-        .from("profiles")
-        .select("id, username, email, role")
-        .limit(1000);
-
-      if (error) throw error;
+      const response = await fetch('/api/admin-users');
+      if (!response.ok) throw new Error('Failed to fetch users');
+      
+      const profiles = await response.json();
       setUsers(profiles || []);
     } catch (error: any) {
       console.error("Error fetching users:", error);
@@ -69,17 +65,21 @@ export default function AdminDashboard() {
     }
   };
 
+  // ✅ Use API route for updates
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
       setUpdating(userId);
-      const { error } = await supabase
-        .from("profiles")
-        .update({ role: newRole })
-        .eq("id", userId);
+      const response = await fetch('/api/admin-users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, role: newRole }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to update role');
 
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      setUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, role: newRole } : u
+      ));
       setMessage(`Role updated successfully to ${newRole}`);
     } catch (error: any) {
       console.error("Error updating role:", error);
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
           <button
             onClick={async () => {
               await logout();
-              window.location.href = "/"; // ✅ Hard redirect
+              window.location.href = "/";
             }}
             className="text-gray-700 hover:text-blue-600 font-medium"
           >

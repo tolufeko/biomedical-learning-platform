@@ -1,3 +1,4 @@
+// app/quiz/[id]/page.tsx
 'use client';
 
 import { useRouter } from "next/navigation";
@@ -70,7 +71,8 @@ interface QuizData {
   id: string;
   title: string;
   description?: string;
-  quiz_questions: QuizQuestion[];
+  // ✅ FIXED: Changed from quiz_questions to questions
+  questions: QuizQuestion[];
 }
 
 interface TextAnswerState {
@@ -112,7 +114,8 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, role, username, loading: authLoading } = useAuth();
 
-  const questions = quizData?.quiz_questions || [];
+  // ✅ FIXED: Changed from quiz_questions to questions
+  const questions = quizData?.questions || [];
   const totalQuestions = questions.length;
   const currentQuestion = questions[currentQuestionIndex];
   const currentQuestionState = questionStates[currentQuestionIndex];
@@ -161,10 +164,9 @@ export default function QuizPage() {
         },
         body: JSON.stringify({
           question_id: questionId,
-          user_id: user.id, // Works for both real and guest users
+          user_id: user.id,
           correct: isCorrect,
-          time_spent: Math.round(timeSpent / 1000), // Convert ms to seconds
-          is_guest: user.role === 'guest'
+          time_spent: Math.round(timeSpent / 1000),
         }),
       });
     } catch (error) {

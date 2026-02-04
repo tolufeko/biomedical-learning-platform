@@ -1,3 +1,4 @@
+// app/teacher/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -24,15 +25,15 @@ interface Quiz {
   id: string; 
   title: string; 
   description?: string; 
-  question_ids: string[];
-  quiz_questions: QuizQuestion[]; 
+  // ✅ Removed: question_ids: string[];
+  questions: QuizQuestion[]; // ✅ Changed from quiz_questions
   created_at: string; 
   updated_at: string; 
   user_id: string;
 }
 interface HardestQuestion {
   question_id: string;
-  question_text: string; // ✅ Added
+  question_text: string;
   error_rate: number;
   total_attempts: number;
   incorrect_attempts: number;
@@ -40,15 +41,14 @@ interface HardestQuestion {
 interface QuizStatistics {
   average_score: number;
   average_time_spent: number;
-  highest_error_question: HardestQuestion | null; // ✅ Updated type
+  highest_error_question: HardestQuestion | null;
   total_attempts: number;
   data_available: boolean;
 }
 
 // =============== MAIN COMPONENT ===============
-export default function AdminPage() {
+export default function TeacherPage() {
   const router = useRouter();
-  // ✅ Single useAuth() call
   const { username, role, user, loading: authLoading, logout } = useAuth();
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -72,7 +72,7 @@ export default function AdminPage() {
 
   // Access check
   useEffect(() => {
-    if (authLoading) return; // Don't redirect while loading
+    if (authLoading) return;
   
     if (!user) {
       router.push("/");
@@ -114,7 +114,6 @@ export default function AdminPage() {
       } else if (viewMode === 'student' && selectedUserName) {
         params.append('username', selectedUserName);
       }
-      // For 'general', no params → global stats
 
       const finalUrl = params.toString() ? `${url}?${params.toString()}` : url;
       const res = await fetch(finalUrl);
@@ -137,7 +136,7 @@ export default function AdminPage() {
     }
   }, [role, viewMode, selectedQuizId, selectedUserName]);
 
-  // =============== Rest of handlers unchanged ===============
+  // =============== Handlers ===============
   const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string }) => {
     try {
       const response = await fetch('/api/quizzes', {
@@ -157,17 +156,17 @@ export default function AdminPage() {
     }
   };
 
+  // ✅ FIXED: Use PUT method instead of delete + recreate
   const handleFormUpdate = async (formData: { title: string; questions: any[]; description?: string }) => {
     if (!editingForm) return;
     try {
-      await fetch(`/api/quizzes/${editingForm.id}`, { method: 'DELETE' });
-      const res = await fetch('/api/quizzes', {
-        method: 'POST',
+      const response = await fetch(`/api/quizzes/${editingForm.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, userId: user?.id }),
+        body: JSON.stringify({ ...formData }),
       });
-      const result = await res.json();
-      if (res.ok) {
+      const result = await response.json();
+      if (response.ok) {
         setSuccess('Quiz updated successfully!');
         fetchQuizzes();
         setEditingForm(null);
@@ -182,12 +181,19 @@ export default function AdminPage() {
     if (!confirm(`Delete "${quizTitle}"?`)) return;
     try {
       const res = await fetch(`/api/quizzes/${quizId}`, { method: 'DELETE' });
-      if (res.ok) {
-        setSuccess('Quiz deleted!');
-        fetchQuizzes();
-      } else throw new Error('Delete failed');
+      
+      // ✅ Get actual error message
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+      
+      setSuccess('Quiz deleted successfully!');
+      fetchQuizzes();
     } catch (err) {
-      setError(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const errorMessage = err instanceof Error ? err.message : 'Delete failed';
+      console.error('Delete error:', err);
+      setError(`Delete failed: ${errorMessage}`);
     }
   };
 
@@ -211,6 +217,7 @@ export default function AdminPage() {
     setIsEditModalOpen(false);
   };
 
+  // ✅ FIXED: Changed quiz_questions to questions
   const convertQuizQuestions = (questions: QuizQuestion[]) => {
     return questions.map(q => {
       if (q.question_type === 'hotspot') {
@@ -223,7 +230,12 @@ export default function AdminPage() {
           image_path: q.image_path || '',
         };
       }
-      return { type: q.question_type, question: q.question_text, options: q.options || [], correctAnswer: q.correct_answer };
+      return { 
+        type: q.question_type, 
+        question: q.question_text, 
+        options: q.options || [], 
+        correctAnswer: q.correct_answer 
+      };
     });
   };
 
@@ -243,7 +255,7 @@ export default function AdminPage() {
           <Link href="/guide" className="text-gray-700 hover:text-blue-600">Guide</Link>
           <button onClick={async () => {
             await logout();
-            window.location.href = "/"; // ✅ HARD REDIRECT
+            window.location.href = "/";
           }} className="text-gray-700 hover:text-blue-600">Sign Out</button>
         </div>
       </nav>
@@ -347,7 +359,7 @@ export default function AdminPage() {
                       type="text"
                       placeholder="e.g., toluwani"
                       value={selectedUserName}
-                      onChange={(e) => setSelectedUserName(e.target.value.trim())} // ✅ Fixed typo
+                      onChange={(e) => setSelectedUserName(e.target.value.trim())}
                       className="w-full p-2 border border-gray-300 rounded-md"
                     />
                     <p className="text-xs text-gray-500 mt-1">
@@ -404,7 +416,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Rest of UI: Create Quiz & Quizzes List (unchanged) */}
+        {/* Create Quiz Section */}
         <div className="mb-8">
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
@@ -422,6 +434,7 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* Quizzes List Section */}
         <div>
           <button
             onClick={() => setShowQuizzesList(!showQuizzesList)}
@@ -442,7 +455,7 @@ export default function AdminPage() {
                     className="w-full p-3 border border-gray-300 rounded-lg"
                   />
                 </div>
-                {/* ... rest of quiz list rendering (same as before) ... */}
+                {/* ... rest of quiz list rendering ... */}
                 {formsLoading ? (
                   <div className="text-center py-8">Loading quizzes...</div>
                 ) : (
@@ -456,7 +469,8 @@ export default function AdminPage() {
                               <h3 className="text-xl font-semibold text-gray-900 mb-2">{quiz.title}</h3>
                               {quiz.description && <p className="text-gray-600 mb-3">{quiz.description}</p>}
                               <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                                <span>{quiz.quiz_questions?.length || 0} question{quiz.quiz_questions?.length !== 1 ? 's' : ''}</span>
+                                {/* ✅ FIXED: Changed quiz_questions to questions */}
+                                <span>{quiz.questions?.length || 0} question{quiz.questions?.length !== 1 ? 's' : ''}</span>
                                 <span>•</span>
                                 <span>Created: {new Date(quiz.created_at).toLocaleDateString()}</span>
                               </div>
@@ -516,7 +530,8 @@ export default function AdminPage() {
                 initialData={{
                   title: editingForm.title,
                   description: editingForm.description || '',
-                  questions: convertQuizQuestions(editingForm.quiz_questions)
+                  // ✅ FIXED: Changed quiz_questions to questions
+                  questions: convertQuizQuestions(editingForm.questions)
                 }}
                 isEditing={true}
               />
