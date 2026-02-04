@@ -1,4 +1,4 @@
-// app/api/admin/users/route.ts
+// app/api/admin-users/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     const { data: profiles, error } = await supabase
       .from('profiles')
       .select('id, username, email, role')
+      .neq('role', 'guest')
       .limit(1000);
 
     if (error) throw error;
