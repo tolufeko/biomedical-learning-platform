@@ -177,16 +177,6 @@ export default function LoginPage() {
           </>
         ) : (
           <>
-            <button
-              onClick={() => {
-                setShowResetForm(false);
-                setResetMessage("");
-              }}
-              className="text-sm text-gray-600 hover:text-gray-800 mb-4 flex items-center"
-            >
-              ← Back to login
-            </button>
-
             <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">
               Reset Password
             </h2>
@@ -227,6 +217,17 @@ export default function LoginPage() {
               >
                 Send Reset Link
               </button>
+              
+              <button
+                onClick={() => {
+                  setShowResetForm(false);
+                  setResetMessage("");
+                }}
+                className="w-full bg-gray-600 text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Back to login
+              </button> 
+
             </form>
           </>
         )}
