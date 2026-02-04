@@ -69,7 +69,7 @@ export default function AdminDashboard() {
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
       setUpdating(userId);
-      const response = await fetch('/api/admin-users', {
+      const response = await fetch('/api/adminusers', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, role: newRole }),

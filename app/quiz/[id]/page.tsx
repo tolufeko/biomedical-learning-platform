@@ -164,7 +164,6 @@ export default function QuizPage() {
         },
         body: JSON.stringify({
           question_id: questionId,
-          user_id: user.id,
           correct: isCorrect,
           time_spent: Math.round(timeSpent / 1000),
         }),

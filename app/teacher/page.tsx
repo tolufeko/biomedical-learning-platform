@@ -142,7 +142,7 @@ export default function TeacherPage() {
       const response = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, userId: user?.id }),
+        body: JSON.stringify({ ...formData }),
       });
       const result = await response.json();
       if (response.ok) {

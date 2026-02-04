@@ -1,11 +1,37 @@
-// app/api/quizzes/[id]/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
-const supabase = createClient(
+const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+// ✅ Helper: Verify user owns quiz (or is admin)
+async function verifyQuizOwnership(quizId: string, userId: string): Promise<boolean> {
+  // 1. Get quiz owner
+  const quizResult = await supabaseAdmin
+    .from('quiz')
+    .select('user_id')
+    .eq('id', quizId)
+    .single();
+
+  if (quizResult.error || !quizResult.data) return false;
+  
+  // 2. If user owns quiz → allow
+  if (quizResult.data.user_id === userId) return true;
+  
+  // 3. Otherwise check if user is admin
+  const profileResult = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+
+  if (profileResult.error || !profileResult.data) return false;
+  return profileResult.data.role === 'admin';
+}
 
 export async function GET(
   _request: Request,
@@ -18,25 +44,25 @@ export async function GET(
     }
 
     // Fetch quiz details
-    const { data: quiz, error: quizError } = await supabase
+    const quizResult = await supabaseAdmin
       .from("quiz")
       .select(`
         *,
-        profiles (username, email)
+        profiles (username, email, role)
       `)
       .eq("id", id)
       .single();
 
-    if (quizError) {
-      console.error('Quiz fetch error:', quizError);
-      throw quizError;
+    if (quizResult.error) {
+      console.error('Quiz fetch error:', quizResult.error);
+      throw quizResult.error;
     }
-    if (!quiz) {
+    if (!quizResult.data) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
     // Fetch questions via junction table
-    const { data: assignments, error: assignError } = await supabase
+    const assignmentsResult = await supabaseAdmin
       .from('question_assignments')
       .select(`
         display_order,
@@ -52,32 +78,27 @@ export async function GET(
       .eq('quiz_id', id)
       .order('display_order', { ascending: true });
 
-    if (assignError) {
-      console.error('Assignments fetch error:', assignError);
-      throw assignError;
+    if (assignmentsResult.error) {
+      console.error('Assignments fetch error:', assignmentsResult.error);
+      throw assignmentsResult.error;
     }
 
-    const questions = assignments?.map(a => ({
+    const questions = assignmentsResult.data?.map(a => ({
       ...a.questions,
       display_order: a.display_order
     })) || [];
 
     // Generate signed URLs for hotspot images
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
     const questionsWithImages = await Promise.all(
       questions.map(async (q: any) => {
         if (q.question_type === 'hotspot' && q.image_path) {
-          const { data: signedUrlData } = await supabaseAdmin.storage
+          const signedUrlResult = await supabaseAdmin.storage
             .from('quiz-images')
             .createSignedUrl(q.image_path, 3600);
           
           return {
             ...q,
-            image_url: signedUrlData?.signedUrl || null
+            image_url: signedUrlResult.data?.signedUrl || null
           };
         }
         return q;
@@ -85,7 +106,7 @@ export async function GET(
     );
 
     return NextResponse.json({
-      ...quiz,
+      ...quizResult.data,
       questions: questionsWithImages
     });
   } catch (err: any) {
@@ -104,11 +125,38 @@ export async function DELETE(
       return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
-    const { error } = await supabase.from("quiz").delete().eq("id", id);
+    // ✅ VERIFY AUTHENTICATION
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+    
+    const userData = await supabase.auth.getUser();
+    const user = userData.data?.user;
 
-    if (error) {
-      console.error('Delete error:', error);
-      throw error;
+    if (userData.error || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Login required' },
+        { status: 401 }
+      );
+    }
+
+    // ✅ VERIFY OWNERSHIP (or admin)
+    const ownsQuiz = await verifyQuizOwnership(id, user.id);
+    if (!ownsQuiz) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not own this quiz' },
+        { status: 403 }
+      );
+    }
+
+    const deleteResult = await supabaseAdmin.from("quiz").delete().eq("id", id);
+
+    if (deleteResult.error) {
+      console.error('Delete error:', deleteResult.error);
+      throw deleteResult.error;
     }
     
     return NextResponse.json({ 
@@ -127,6 +175,34 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    
+    // ✅ VERIFY AUTHENTICATION
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+    
+    const userData = await supabase.auth.getUser();
+    const user = userData.data?.user;
+
+    if (userData.error || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Login required' },
+        { status: 401 }
+      );
+    }
+
+    // ✅ VERIFY OWNERSHIP (or admin)
+    const ownsQuiz = await verifyQuizOwnership(id, user.id);
+    if (!ownsQuiz) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not own this quiz' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { title, description, questions } = body;
 
@@ -138,7 +214,7 @@ export async function PUT(
     }
 
     // Update quiz metadata
-    const { data: updatedQuiz, error: updateError } = await supabase
+    const updateResult = await supabaseAdmin
       .from('quiz')
       .update({
         title,
@@ -148,22 +224,22 @@ export async function PUT(
       .select()
       .single();
 
-    if (updateError) {
-      console.error('Update quiz error:', updateError);
-      throw updateError;
+    if (updateResult.error) {
+      console.error('Update quiz error:', updateResult.error);
+      throw updateResult.error;
     }
 
     // If questions array is provided, update assignments
     if (Array.isArray(questions) && questions.length > 0) {
       // Delete existing assignments
-      const { error: deleteError } = await supabase
+      const deleteAssignmentsResult = await supabaseAdmin
         .from('question_assignments')
         .delete()
         .eq('quiz_id', id);
 
-      if (deleteError) {
-        console.error('Delete assignments error:', deleteError);
-        throw deleteError;
+      if (deleteAssignmentsResult.error) {
+        console.error('Delete assignments error:', deleteAssignmentsResult.error);
+        throw deleteAssignmentsResult.error;
       }
 
       // Create new assignments
@@ -173,15 +249,15 @@ export async function PUT(
         let questionId: string;
         
         // Reuse or create question
-        const { data: existingQuestion } = await supabase
+        const existingQuestionResult = await supabaseAdmin
           .from('questions')
           .select('id')
           .eq('question_text', q.question)
           .eq('question_type', q.type)
           .single();
 
-        if (existingQuestion) {
-          questionId = existingQuestion.id;
+        if (existingQuestionResult.data) {
+          questionId = existingQuestionResult.data.id;
         } else {
           let correctAnswer = q.correctAnswer;
           
@@ -195,7 +271,7 @@ export async function PUT(
             }
           }
 
-          const { data: newQuestion } = await supabase
+          const newQuestionResult = await supabaseAdmin
             .from('questions')
             .insert([{
               question_type: q.type,
@@ -207,7 +283,8 @@ export async function PUT(
             .select('id')
             .single();
 
-          questionId = newQuestion!.id;
+          if (newQuestionResult.error) throw newQuestionResult.error;
+          questionId = newQuestionResult.data!.id;
         }
 
         assignmentData.push({
@@ -217,18 +294,18 @@ export async function PUT(
         });
       }
 
-      const { error: insertError } = await supabase
+      const insertAssignmentsResult = await supabaseAdmin
         .from('question_assignments')
         .insert(assignmentData);
 
-      if (insertError) {
-        console.error('Insert assignments error:', insertError);
-        throw insertError;
+      if (insertAssignmentsResult.error) {
+        console.error('Insert assignments error:', insertAssignmentsResult.error);
+        throw insertAssignmentsResult.error;
       }
     }
 
     // Fetch updated quiz with questions
-    const { data: assignments } = await supabase
+    const assignmentsResult = await supabaseAdmin
       .from('question_assignments')
       .select(`
         display_order,
@@ -244,9 +321,11 @@ export async function PUT(
       .eq('quiz_id', id)
       .order('display_order', { ascending: true });
 
+    if (assignmentsResult.error) throw assignmentsResult.error;
+
     const quizWithQuestions = {
-      ...updatedQuiz,
-      questions: assignments?.map(a => ({
+      ...updateResult.data,
+      questions: assignmentsResult.data?.map(a => ({
         ...a.questions,
         display_order: a.display_order
       })) || []
