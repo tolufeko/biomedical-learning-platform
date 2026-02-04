@@ -157,10 +157,10 @@ export async function GET(request: Request) {
     let analyticsData: any[] = [];
 
     if (quizId) {
-      // Get all question_ids for this quiz via junction table
+      // ✅ GET assignment IDs for this quiz (normalized approach)
       const assignmentsResult = await supabaseAdmin
         .from('question_assignments')
-        .select('question_id')
+        .select('id')
         .eq('quiz_id', quizId);
 
       if (assignmentsResult.error) throw assignmentsResult.error;
@@ -168,11 +168,20 @@ export async function GET(request: Request) {
       if (assignmentsResult.data.length === 0) {
         analyticsData = [];
       } else {
-        const questionIds = assignmentsResult.data.map(a => a.question_id);
+        const assignmentIds = assignmentsResult.data.map(a => a.id);
+        
+        // ✅ QUERY BY question_assignment_id (NOT question_id)
         let query = supabaseAdmin
           .from('analytics')
-          .select('*')
-          .in('question_id', questionIds);
+          .select(`
+            *,
+            question_assignments (
+              question_id,
+              display_order,
+              questions (question_text)
+            )
+          `)
+          .in('question_assignment_id', assignmentIds); // ✅ CORRECT FILTER
 
         if (resolvedUserId) {
           query = query.eq('user_id', resolvedUserId);
@@ -183,15 +192,31 @@ export async function GET(request: Request) {
         analyticsData = queryResult.data;
       }
     } else {
-      // General or per-user stats (no quiz filter)
-      let query = supabaseAdmin.from('analytics').select('*');
+      // ✅ GENERAL STATS: Always join to get question context
+      let query = supabaseAdmin
+        .from('analytics')
+        .select(`
+          *,
+          question_assignments (
+            question_id,
+            questions (question_text)
+          )
+        `);
+      
       if (resolvedUserId) {
         query = query.eq('user_id', resolvedUserId);
       }
+      
       const queryResult = await query;
       if (queryResult.error) throw queryResult.error;
       analyticsData = queryResult.data;
     }
+
+    // ✅ FILTER OUT RECORDS MISSING QUESTION CONTEXT (defensive)
+    analyticsData = analyticsData.filter(record => 
+      record.question_assignments?.question_id && 
+      record.question_assignments?.questions?.question_text
+    );
 
     if (analyticsData.length === 0) {
       return NextResponse.json({
@@ -203,32 +228,28 @@ export async function GET(request: Request) {
       });
     }
 
-    // Build question text map
+    // ✅ BUILD QUESTION TEXT MAP FROM JOINED DATA (no separate query needed)
     const questionTextMap: Record<string, string> = {};
-    const questionIds = [...new Set(analyticsData.map(a => a.question_id))];
-    
-    if (questionIds.length > 0) {
-      const questionsResult = await supabaseAdmin
-        .from('questions')
-        .select('id, question_text')
-        .in('id', questionIds);
-      
-      if (questionsResult.data) {
-        for (const q of questionsResult.data) {
-          questionTextMap[q.id] = q.question_text;
-        }
+    analyticsData.forEach(record => {
+      const qId = record.question_assignments.question_id;
+      const qText = record.question_assignments.questions.question_text;
+      if (qId && qText && !questionTextMap[qId]) {
+        questionTextMap[qId] = qText;
       }
-    }
+    });
 
-    // === Compute stats ===
+    // === Compute stats (using actual question_id from joined data) ===
     const correctCount = analyticsData.filter(r => r.correct).length;
     const averageScore = (correctCount / analyticsData.length) * 100;
     const totalTime = analyticsData.reduce((sum, r) => sum + (r.time_spent || 0), 0);
     const averageTime = totalTime / analyticsData.length;
 
+    // ✅ AGGREGATE BY ACTUAL question_id (from joined data)
     const questionStats: Record<string, { total: number; incorrect: number }> = {};
     analyticsData.forEach(record => {
-      const qId = String(record.question_id);
+      const qId = record.question_assignments.question_id;
+      if (!qId) return;
+      
       if (!questionStats[qId]) {
         questionStats[qId] = { total: 0, incorrect: 0 };
       }
@@ -246,7 +267,7 @@ export async function GET(request: Request) {
       if (errorRate > highestErrorRate) {
         highestErrorRate = errorRate;
         highestErrorQuestion = {
-          question_id: questionId,
+          question_id: questionId, // ✅ Actual question ID (from joined data)
           question_text: questionTextMap[questionId] || 'Unknown question',
           error_rate: parseFloat(errorRate.toFixed(1)),
           total_attempts: stats.total,
