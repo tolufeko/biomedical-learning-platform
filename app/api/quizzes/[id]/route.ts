@@ -33,6 +33,23 @@ async function verifyQuizOwnership(quizId: string, userId: string): Promise<bool
   return profileResult.data.role === 'admin';
 }
 
+// Helper: Extract unique image paths from questions array
+function extractImagePaths(questions: any[]): string[] {
+  if (!Array.isArray(questions)) return [];
+  
+  return Array.from(
+    new Set(
+      questions
+        .map(q => 
+          q.image_path ||          // Standard field
+          q.filePath ||            // Alternate field
+          (q.image_url?.includes('supabase.co') ? null : null) // Skip signed URLs
+        )
+        .filter(Boolean) as string[]
+    )
+  );
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -142,7 +159,7 @@ export async function DELETE(
       );
     }
 
-    // ✅ VERIFY OWNERSHIP (or admin)
+    // ✅ VERIFY OWNERSHIP
     const ownsQuiz = await verifyQuizOwnership(id, user.id);
     if (!ownsQuiz) {
       return NextResponse.json(
@@ -151,16 +168,83 @@ export async function DELETE(
       );
     }
 
-    const deleteResult = await supabaseAdmin.from("quiz").delete().eq("id", id);
+    // 🔑 STEP 1: FETCH QUIZ TO GET IMAGE PATHS BEFORE DELETION
+    const { data: quizData, error: fetchError } = await supabaseAdmin
+      .from('quiz')
+      .select('questions')
+      .eq('id', id)
+      .single();
 
-    if (deleteResult.error) {
-      console.error('Delete error:', deleteResult.error);
-      throw deleteResult.error;
+    if (fetchError) {
+      console.error('Failed to fetch quiz:', fetchError);
+      return NextResponse.json(
+        { error: 'Quiz not found' },
+        { status: 404 }
+      );
     }
-    
+
+    // 🔑 STEP 2: EXTRACT & CLEAN UP IMAGES
+    const imagePaths = extractImagePaths(quizData.questions || []);
+    const deletedPaths: string[] = [];
+    const failedPaths: { path: string; error: string }[] = [];
+
+    if (imagePaths.length > 0) {
+      console.log(`🧹 Cleaning up ${imagePaths.length} image(s) for quiz ${id}`);
+      
+      // Delete images in parallel with error handling
+      await Promise.allSettled(
+        imagePaths.map(async (path) => {
+          try {
+            const { error: deleteError } = await supabaseAdmin.storage
+              .from('quiz-images')
+              .remove([path]);
+            
+            if (deleteError) {
+              console.error(`Failed to delete image ${path}:`, deleteError.message);
+              failedPaths.push({ path, error: deleteError.message });
+            } else {
+              deletedPaths.push(path);
+              console.log(`✅ Deleted image: ${path}`);
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            console.error(`Exception deleting ${path}:`, msg);
+            failedPaths.push({ path, error: msg });
+          }
+        })
+      );
+    }
+
+    // 🔑 STEP 3: DELETE QUIZ FROM DATABASE
+    const { error: deleteError } = await supabaseAdmin
+      .from('quiz')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('Database delete failed:', deleteError);
+      // Rollback: Re-upload deleted images? (Not feasible - log warning instead)
+      console.warn('⚠️ WARNING: Images were deleted but quiz deletion failed. Orphaned images may exist.');
+      return NextResponse.json(
+        { 
+          error: 'Failed to delete quiz after image cleanup',
+          deletedImages: deletedPaths,
+          failedImages: failedPaths
+        },
+        { status: 500 }
+      );
+    }
+
+    // ✅ SUCCESS RESPONSE WITH CLEANUP REPORT
     return NextResponse.json({ 
-      success: true, 
-      message: "Quiz deleted successfully" 
+      success: true,
+      message: "Quiz deleted successfully",
+      cleanup: {
+        totalImages: imagePaths.length,
+        deleted: deletedPaths.length,
+        failed: failedPaths.length,
+        failedDetails: failedPaths
+      }
     });
   } catch (err: any) {
     console.error("DELETE /quizzes/[id] error:", err);
