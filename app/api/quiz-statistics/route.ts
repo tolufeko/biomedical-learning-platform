@@ -43,7 +43,6 @@ async function canAccessUserData(
 
   // ✅ ADMINS AND TEACHERS CAN VIEW ANY USER'S DATA
   if (viewerRole === 'admin' || viewerRole === 'teacher') {
-    console.log(`✅ Access granted: ${viewerRole} can view any user's data`);
     return { allowed: true };
   }
 
@@ -72,7 +71,6 @@ async function canAccessQuizEndpoint(
 
   // ✅ ADMINS, TEACHERS, AND STUDENTS CAN ACCESS QUIZ STATS ENDPOINT
   if (['admin', 'teacher', 'student'].includes(userRole)) {
-    console.log(`✅ Access granted to quiz stats endpoint: ${userRole}`);
     return { allowed: true };
   }
 
@@ -106,13 +104,11 @@ export async function GET(request: Request) {
 
     // Get current user's role for logging and enforcement
     const currentUserRole = await getUserRole(currentUser.id);
-    console.log(`🔍 Request: user=${currentUser.id}, role=${currentUserRole}, quiz_id=${quizId}, user_id=${userId}`);
 
     // ✅ STEP 1: Verify access to QUIZ STATS ENDPOINT
     if (quizId) {
       const endpointAccess = await canAccessQuizEndpoint(currentUser.id);
       if (!endpointAccess.allowed) {
-        console.log(`❌ Endpoint access denied: ${endpointAccess.reason}`);
         return NextResponse.json(
           { error: 'Forbidden', reason: endpointAccess.reason },
           { status: 403 }
@@ -148,7 +144,6 @@ export async function GET(request: Request) {
     if (resolvedUserId) {
       const userAccess = await canAccessUserData(currentUser.id, resolvedUserId);
       if (!userAccess.allowed) {
-        console.log(`❌ User data access denied: ${userAccess.reason}`);
         return NextResponse.json(
           { 
             error: 'Forbidden: You do not have permission to view this user\'s statistics',
@@ -163,7 +158,6 @@ export async function GET(request: Request) {
     // If student makes request WITHOUT user filter, automatically filter to themselves
     if (currentUserRole === 'student' && !resolvedUserId) {
       resolvedUserId = currentUser.id;
-      console.log(`🔒 Student access: auto-filtering to own user ID ${resolvedUserId}`);
     }
 
     // ✅ STEP 4: FETCH ANALYTICS DATA

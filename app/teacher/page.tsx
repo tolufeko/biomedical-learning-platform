@@ -25,8 +25,7 @@ interface Quiz {
   id: string; 
   title: string; 
   description?: string; 
-  // ✅ Removed: question_ids: string[];
-  questions: QuizQuestion[]; // ✅ Changed from quiz_questions
+  questions: QuizQuestion[];
   created_at: string; 
   updated_at: string; 
   user_id: string;
@@ -156,7 +155,6 @@ export default function TeacherPage() {
     }
   };
 
-  // ✅ FIXED: Use PUT method instead of delete + recreate
   const handleFormUpdate = async (formData: { title: string; questions: any[]; description?: string }) => {
     if (!editingForm) return;
     try {
@@ -217,7 +215,6 @@ export default function TeacherPage() {
     setIsEditModalOpen(false);
   };
 
-  // ✅ FIXED: Changed quiz_questions to questions
   const convertQuizQuestions = (questions: QuizQuestion[]) => {
     return questions.map(q => {
       if (q.question_type === 'hotspot') {
@@ -357,7 +354,6 @@ export default function TeacherPage() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g., toluwani"
                       value={selectedUserName}
                       onChange={(e) => setSelectedUserName(e.target.value.trim())}
                       className="w-full p-2 border border-gray-300 rounded-md"

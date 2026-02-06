@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
+import Navbar from '@/components/layout/Navbar';
 import { AuthProvider } from "@/lib/AuthContext";
 
 const geistSans = Geist({
@@ -28,9 +30,21 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* ✅ RENDER THE NAVBAR HERE (was missing before!) */}
+        <Navbar />
+        
+        {/* ✅ Add padding-top to prevent content hiding under fixed navbar */}
         <AuthProvider>
-          {children}
+          <main className="pt-16 min-h-screen">
+            {children}
+          </main>
         </AuthProvider>
+        
+        <footer className="bg-white border-t py-6">
+          <div className="max-w-7xl mx-auto px-4 text-center text-gray-500 text-sm">
+            © {new Date().getFullYear()} Biomedical Learning Platform
+          </div>
+        </footer>
       </body>
     </html>
   );

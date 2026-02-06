@@ -8,12 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
 
-// ✅ Fixed: Changed quiz_questions to questions
 interface Quiz {
   id: string;
   title: string;
   description: string;
-  questions: any[]; // ✅ Changed from quiz_questions
+  questions: any[]; 
   user_id?: string;
   created_at?: string;
   updated_at?: string;
