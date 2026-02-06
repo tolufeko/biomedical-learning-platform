@@ -22,7 +22,7 @@ async function verifyQuizOwnership(quizId: string, userId: string): Promise<bool
   // 2. If user owns quiz → allow
   if (quizResult.data.user_id === userId) return true;
   
-  // 3. Otherwise check if user is admin
+  // 3. Otherwise check if user is teacher/admin
   const profileResult = await supabaseAdmin
     .from('profiles')
     .select('role')
@@ -30,7 +30,7 @@ async function verifyQuizOwnership(quizId: string, userId: string): Promise<bool
     .single();
 
   if (profileResult.error || !profileResult.data) return false;
-  return profileResult.data.role === 'admin';
+  return (profileResult.data.role === 'teacher' || profileResult.data.role === 'admin');
 }
 
 // Helper: Extract unique image paths from questions array
@@ -131,6 +131,7 @@ export async function GET(
   }
 }
 
+// ✅ FIXED DELETE HANDLER
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -168,30 +169,34 @@ export async function DELETE(
       );
     }
 
-    // 🔑 STEP 1: FETCH QUIZ TO GET IMAGE PATHS BEFORE DELETION
-    const { data: quizData, error: fetchError } = await supabaseAdmin
-      .from('quiz')
-      .select('questions')
-      .eq('id', id)
-      .single();
+    // 🔑 STEP 1: FETCH QUESTION ASSIGNMENTS TO GET IMAGE PATHS (BEFORE DELETION)
+    const { data: assignments, error: assignmentsError } = await supabaseAdmin
+      .from('question_assignments')
+      .select(`
+        id,
+        display_order,
+        questions (
+          id,
+          image_path
+        )
+      `)
+      .eq('quiz_id', id)
+      .order('display_order', { ascending: true });
 
-    if (fetchError) {
-      console.error('Failed to fetch quiz:', fetchError);
-      return NextResponse.json(
-        { error: 'Quiz not found' },
-        { status: 404 }
-      );
+    if (assignmentsError) {
+      console.error('Failed to fetch assignments:', assignmentsError);
     }
 
-    // 🔑 STEP 2: EXTRACT & CLEAN UP IMAGES
-    const imagePaths = extractImagePaths(quizData.questions || []);
+    // 🔑 STEP 2: EXTRACT IMAGE PATHS FROM QUESTIONS
+    const questions = assignments?.map(a => a.questions) || [];
+    const imagePaths = extractImagePaths(questions);
     const deletedPaths: string[] = [];
     const failedPaths: { path: string; error: string }[] = [];
 
+    // 🔑 STEP 3: DELETE IMAGES FROM STORAGE
     if (imagePaths.length > 0) {
       console.log(`🧹 Cleaning up ${imagePaths.length} image(s) for quiz ${id}`);
       
-      // Delete images in parallel with error handling
       await Promise.allSettled(
         imagePaths.map(async (path) => {
           try {
@@ -215,7 +220,7 @@ export async function DELETE(
       );
     }
 
-    // 🔑 STEP 3: DELETE QUIZ FROM DATABASE
+    // 🔑 STEP 4: DELETE QUIZ FROM DATABASE (assignments auto-delete via CASCADE)
     const { error: deleteError } = await supabaseAdmin
       .from('quiz')
       .delete()
@@ -223,8 +228,7 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('Database delete failed:', deleteError);
-      // Rollback: Re-upload deleted images? (Not feasible - log warning instead)
-      console.warn('⚠️ WARNING: Images were deleted but quiz deletion failed. Orphaned images may exist.');
+      console.warn('⚠️ WARNING: Images were deleted but quiz deletion failed');
       return NextResponse.json(
         { 
           error: 'Failed to delete quiz after image cleanup',
