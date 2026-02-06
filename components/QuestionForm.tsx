@@ -65,6 +65,14 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const [imageLoadedStates, setImageLoadedStates] = useState<{[key: string]: boolean}>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Question Bank Modal State
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [questionBank, setQuestionBank] = useState<any[]>([]);
+  const [loadingBank, setLoadingBank] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBankQuestion, setSelectedBankQuestion] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string>('all');
+
   // Initialize form with initialData when in edit mode
   useEffect(() => {
     if (initialData) {
@@ -109,6 +117,86 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     setQuestions([...questions, newQuestion]);
     setCurrentQuestionIndex(questions.length);
   };
+
+  const addQuestionFromBank = () => {
+    setIsBankModalOpen(true);
+    fetchQuestionBank();
+  };
+
+  const fetchQuestionBank = async () => {
+    setLoadingBank(true);
+    try {
+      const response = await fetch('/api/question-bank', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+  
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+  
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || `Failed to fetch question bank: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      console.log('Question bank data:', data);
+      
+      setQuestionBank(data.questions || []);
+    } catch (error) {
+      console.error('Full error details:', error);
+      alert(`Failed to load question bank: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingBank(false);
+    }
+  };
+
+  const handleSelectFromBank = () => {
+    if (!selectedBankQuestion) {
+      alert('Please select a question first');
+      return;
+    }
+  
+    const selected = questionBank.find(q => q.id === selectedBankQuestion);
+    if (!selected) return;
+  
+    // Convert Supabase question to LocalQuestion format
+    const newQuestion: LocalQuestion = {
+      id: Date.now().toString(), // Generate new ID for the form
+      type: selected.type,
+      question: selected.question,
+      options: Array.isArray(selected.options) ? [...selected.options] : [],
+      correctAnswer: Array.isArray(selected.correctAnswer) 
+        ? [...selected.correctAnswer] 
+        : selected.correctAnswer || '',
+      image_url: selected.image_url || undefined,
+      filePath: selected.image_path || undefined,
+    };
+  
+    setQuestions([...questions, newQuestion]);
+    setCurrentQuestionIndex(questions.length);
+    setIsBankModalOpen(false);
+    setSelectedBankQuestion(null);
+    setSearchTerm('');
+  };
+
+  // Filtered questions based on search and type
+  const filteredBankQuestions = React.useMemo(() => {
+    return questionBank.filter((q) => {
+      const matchesSearch = searchTerm === '' || 
+        q.question?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        q.options?.some((opt: string) => 
+          opt.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      
+      const matchesType = filterType === 'all' || q.type === filterType;
+      
+      return matchesSearch && matchesType;
+    });
+  }, [questionBank, searchTerm, filterType]);
 
   const updateQuestion = (id: string, field: keyof LocalQuestion, value: any) => {
     setQuestions(questions.map(q => 
@@ -422,8 +510,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
               options: q.options,
               correctAnswer: q.correctAnswer,
               image_url: q.image_url
-            })),
-            userId: "user-id-here"
+            }))
           }),
         });
 
@@ -821,7 +908,15 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             onClick={addQuestion}
             className="add-question-btn bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
-            {questions.length === 0 ? 'Add First Question' : 'Add Another Question'}
+            {'Add New Question'}
+          </button>
+
+          <button 
+            type="button" 
+            onClick={addQuestionFromBank}
+            className="add-question-btn bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            {'Add Question From Question Bank'}
           </button>
           
           {questions.length > 0 && (
@@ -833,6 +928,169 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             </button>
           )}
         </div>
+
+        {/* Question Bank Modal */}
+        {isBankModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="p-4 border-b flex justify-between items-center">
+                <h3 className="text-xl font-bold">Question Bank</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBankModalOpen(false);
+                    setSelectedBankQuestion(null);
+                    setSearchTerm('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Search & Filter Bar */}
+              <div className="p-4 border-b space-y-3">
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium mb-1">Search Questions</label>
+                    <input
+                      type="text"
+                      placeholder="Search by question text..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  <div className="w-48">
+                    <label className="block text-sm font-medium mb-1">Filter by Type</label>
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="w-full border rounded px-3 py-2"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="text">Text</option>
+                      <option value="multiple-choice">Multiple Choice</option>
+                      <option value="hotspot">Hotspot</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Question Table */}
+              <div className="flex-1 overflow-auto p-4">
+                {loadingBank ? (
+                  <div className="text-center py-8 text-gray-500">
+                    Loading questions...
+                  </div>
+                ) : questionBank.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No questions in the bank yet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-3 text-left text-sm font-medium">Select</th>
+                          <th className="p-3 text-left text-sm font-medium">Type</th>
+                          <th className="p-3 text-left text-sm font-medium">Question</th>
+                          <th className="p-3 text-left text-sm font-medium">Options</th>
+                          <th className="p-3 text-left text-sm font-medium">Correct Answer</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredBankQuestions.map((q) => {
+                          const isSelected = selectedBankQuestion === q.id;
+                          return (
+                            <tr
+                              key={q.id}
+                              className={`border-b hover:bg-gray-50 cursor-pointer ${
+                                isSelected ? 'bg-blue-50' : ''
+                              }`}
+                              onClick={() => setSelectedBankQuestion(q.id)}
+                            >
+                              <td className="p-3">
+                                <input
+                                  type="radio"
+                                  checked={isSelected}
+                                  onChange={() => setSelectedBankQuestion(q.id)}
+                                  className="w-4 h-4"
+                                />
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  q.type === 'text' ? 'bg-blue-100 text-blue-800' :
+                                  q.type === 'multiple-choice' ? 'bg-green-100 text-green-800' :
+                                  'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {q.type === 'multiple-choice' ? 'MCQ' : q.type}
+                                </span>
+                              </td>
+                              <td className="p-3 max-w-md truncate">
+                                {q.question || <span className="text-gray-400">No question text</span>}
+                              </td>
+                              <td className="p-3 text-sm text-gray-600">
+                                {q.options && q.options.length > 0 
+                                  ? q.options.length === 1 
+                                    ? '1 option' 
+                                    : `${q.options.length} options`
+                                  : '-'}
+                              </td>
+                              <td className="p-3 text-sm text-gray-600 truncate max-w-xs">
+                                {Array.isArray(q.correctAnswer)
+                                  ? q.correctAnswer.length > 0
+                                    ? q.correctAnswer.join(', ').substring(0, 30) + '...'
+                                    : '-'
+                                  : typeof q.correctAnswer === 'string'
+                                  ? q.correctAnswer.substring(0, 30) + '...'
+                                  : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t flex justify-between items-center">
+                <div className="text-sm text-gray-600">
+                  {filteredBankQuestions.length} of {questionBank.length} questions shown
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBankModalOpen(false);
+                      setSelectedBankQuestion(null);
+                      setSearchTerm('');
+                    }}
+                    className="px-4 py-2 border rounded hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectFromBank}
+                    disabled={!selectedBankQuestion}
+                    className={`px-4 py-2 rounded font-medium ${
+                      selectedBankQuestion
+                        ? 'bg-blue-500 text-white hover:bg-blue-600'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    Add Selected Question
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );
