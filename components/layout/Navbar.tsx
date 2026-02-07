@@ -9,38 +9,33 @@ import MobileMenu from './MobileMenu';
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // ✅ Added mobile state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial user
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-
-      if (user) {
-        // Fetch profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('username, role, avatar_url')
-          .eq('id', user.id)
-          .single();
-
-        setProfile(profile);
-      }
-    };
-
-    getUser();
-
-    // ✅ FIXED: Correct destructuring syntax
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      setIsLoading(false);
+
+      if (currentUser) {
         supabase
           .from('profiles')
-          .select('username, role, avatar_url')
-          .eq('id', session.user.id)
+          .select('username, role')
+          .eq('id', currentUser.id)
           .single()
-          .then(({ data }) => setProfile(data));
+          .then(({ data, error }) => {
+            if (error) {
+              console.warn('Profile fetch failed (using fallback):', error.message);
+              // Fallback to email-based username
+              setProfile({
+                username: currentUser.email?.split('@')[0] || 'User',
+                role: 'student'
+              });
+            } else {
+              setProfile(data);
+            }
+          });
       } else {
         setProfile(null);
       }
@@ -48,6 +43,17 @@ export default function Navbar() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // ✅ Handle loading state
+  if (isLoading) {
+    return (
+        <nav className="fixed w-full bg-white z-50 shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center">
+            <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        </nav>
+    );
+  }
 
   // Navigation logic based on role...
   const navLinks = user ? (
@@ -61,10 +67,7 @@ export default function Navbar() {
       { href: '/student', label: 'Dashboard' },
       { href: '/student/quizzes', label: 'Quizzes' },
     ]
-  ) : [
-    { href: '/', label: 'Home' },
-    { href: '/about', label: 'About' },
-  ];
+  ): [];
 
   return (
     <nav className="fixed w-full bg-white z-50 shadow-sm">
@@ -91,7 +94,7 @@ export default function Navbar() {
           {/* Auth/User Menu */}
           <div className="flex items-center space-x-4">
             {user ? (
-              <UserMenu user={user} profile={profile} /> // ✅ Pass user and profile
+              <UserMenu user={user} profile={profile} />
             ) : (
               <Link href="/auth/sign-in" className="text-blue-600 hover:text-blue-700">
                 Sign In

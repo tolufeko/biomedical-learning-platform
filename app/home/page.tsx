@@ -71,7 +71,6 @@ export default function HomePage() {
         }
         
         const data = await response.json();
-        console.log('Quizzes loaded:', data); // ✅ Debug log
         setQuizzes(data);
       } catch (error: any) {
         console.error('Error fetching quizzes:', error);

@@ -30,10 +30,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* ✅ RENDER THE NAVBAR HERE (was missing before!) */}
         <Navbar />
-        
-        {/* ✅ Add padding-top to prevent content hiding under fixed navbar */}
+
         <AuthProvider>
           <main className="pt-16 min-h-screen">
             {children}
