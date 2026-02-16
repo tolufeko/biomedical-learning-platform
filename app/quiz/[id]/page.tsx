@@ -115,7 +115,6 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, role, username, loading: authLoading } = useAuth();
 
-  // ✅ FIXED: Changed from quiz_questions to questions
   const questions = quizData?.questions || [];
   const totalQuestions = questions.length;
   const currentQuestion = questions[currentQuestionIndex];
@@ -176,6 +175,15 @@ export default function QuizPage() {
       console.error('Error saving analytics:', error);
     }
   };
+
+  // Access check
+  useEffect(() => {
+    if (authLoading) return;
+  
+    if (!user) {
+      router.push("/");
+    }
+  }, [user, role, authLoading, router]);
 
   // Initialize question states
   useEffect(() => {

@@ -20,7 +20,7 @@ interface Quiz {
 
 export default function HomePage() {
   const router = useRouter();
-  const { username, role, logout } = useAuth();
+  const { user, role, username, loading: authLoading, logout } = useAuth();
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +58,15 @@ export default function HomePage() {
       </div>
     </nav>
   );
+
+  // Access check
+  useEffect(() => {
+    if (authLoading) return;
+  
+    if (!user) {
+      router.push("/");
+    }
+  }, [user, role, authLoading, router]);
 
   useEffect(() => {
     const fetchQuizzes = async () => {

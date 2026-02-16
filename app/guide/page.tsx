@@ -3,10 +3,20 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
+import { useEffect } from "react";
 
 export default function HelpPage() {
-  const { username, role, logout } = useAuth(); // ✅ One call
   const router = useRouter();
+  const { user, role, username, loading: authLoading, logout } = useAuth();
+
+  // Access check
+  useEffect(() => {
+    if (authLoading) return;
+  
+    if (!user) {
+      router.push("/");
+    }
+  }, [user, role, authLoading, router]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

@@ -15,7 +15,7 @@ export default function UpdatePasswordPage() {
     // Check if user has a valid session from the reset link
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        router.push("/login");
+        router.push("/");
       }
     });
   }, [router]);
