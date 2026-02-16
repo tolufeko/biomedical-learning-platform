@@ -3,63 +3,133 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import Link from "next/link";
 
-export default function UpdatePasswordPage() {
+export default function ChangePasswordPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Check if user has a valid session from the reset link
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push("/login");
+    // Check if user is logged in
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        router.push("/");
+      } else {
+        setUser(user);
       }
     });
   }, [router]);
 
-  const handleUpdatePassword = async (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage("");
 
+    // Validation
     if (newPassword !== confirmPassword) {
-      setMessage("Passwords do not match!");
+      setMessage("New passwords do not match!");
+      setMessageType("error");
       return;
     }
 
     if (newPassword.length < 6) {
       setMessage("Password must be at least 6 characters long.");
+      setMessageType("error");
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setMessage("New password must be different from current password.");
+      setMessageType("error");
       return;
     }
 
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+    try {
+      // Verify current password by attempting to sign in
+      if (!user?.email) {
+        setMessage("User email not found. Please log in again.");
+        setMessageType("error");
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
 
-    if (error) {
-      setMessage("Error updating password: " + error.message);
-    } else {
-      setMessage("Password updated successfully! Redirecting...");
-      setTimeout(() => {
-        router.push("/home");
-      }, 2000);
+      if (signInError) {
+        setMessage("Current password is incorrect.");
+        setMessageType("error");
+        setLoading(false);
+        return;
+      }
+
+      // Update to new password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        setMessage("Error updating password: " + updateError.message);
+        setMessageType("error");
+      } else {
+        setMessage("Password changed successfully! Redirecting...");
+        setMessageType("success");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        
+        setTimeout(() => {
+          router.push("/");
+        }, 2000);
+      }
+    } catch (err) {
+      setMessage("An unexpected error occurred. Please try again.");
+      setMessageType("error");
+      console.error("Change password error:", err);
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="text-gray-600">Loading...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-md bg-white shadow-md rounded-2xl p-8">
         <h1 className="text-3xl font-bold text-center text-blue-700 mb-6">
-          Update Password
+          Change Password
         </h1>
 
-        <form onSubmit={handleUpdatePassword} className="space-y-4">
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="block text-gray-700 text-sm font-medium mb-2">
+              Current Password
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="••••••••"
+            />
+          </div>
+
           <div>
             <label className="block text-gray-700 text-sm font-medium mb-2">
               New Password
@@ -72,6 +142,9 @@ export default function UpdatePasswordPage() {
               className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Must be at least 6 characters
+            </p>
           </div>
 
           <div>
@@ -89,24 +162,32 @@ export default function UpdatePasswordPage() {
           </div>
 
           {message && (
-            <p
-              className={`text-sm text-center ${
-                message.startsWith("Error") || message.startsWith("Password")
-                  ? "text-red-600"
-                  : "text-green-600"
+            <div
+              className={`text-sm text-center p-3 rounded-lg ${
+                messageType === "error"
+                  ? "bg-red-50 text-red-600"
+                  : "bg-green-50 text-green-600"
               }`}
             >
               {message}
-            </p>
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
-          >
-            {loading ? "Updating..." : "Update Password"}
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+            >
+              {loading ? "Updating..." : "Change Password"}
+            </button>
+            <Link
+              href="/"
+              className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg hover:bg-gray-300 transition-colors text-center"
+            >
+              Cancel
+            </Link>
+          </div>
         </form>
       </div>
     </main>
