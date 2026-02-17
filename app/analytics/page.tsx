@@ -95,21 +95,6 @@ export default function TeacherPage() {
     // =============== RENDER ===============
     return (
         <div className="min-h-screen bg-gray-50">
-        {/* Navbar */}
-        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-            <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-            <div className="flex gap-6 items-center">
-            {username ? `${username}` : "Guest"}
-            {role === 'admin' && <Link href="/admin" className="text-gray-700 hover:text-blue-600">Admin View</Link>}
-            <Link href="/home" className="text-gray-700 hover:text-blue-600">Home</Link>
-            <Link href="/guide" className="text-gray-700 hover:text-blue-600">Guide</Link>
-            <button onClick={async () => {
-                await logout();
-                window.location.href = "/";
-            }} className="text-gray-700 hover:text-blue-600">Sign Out</button>
-            </div>
-        </nav>
-
         {/* Messages */}
         {error && (
             <div className="max-w-6xl mx-auto mt-6 px-6">

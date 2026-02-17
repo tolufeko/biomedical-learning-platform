@@ -20,36 +20,6 @@ export default function HelpPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* Navbar */}
-      <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-        <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-        <div className="flex gap-6 items-center">
-          {username ? `${username}` : "Guest"}
-          {role === 'admin' && (
-            <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-              Admin View
-            </Link>
-          )}
-          {(role === 'teacher' || role === 'admin') && (
-            <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-              Teacher View
-            </Link>
-          )}
-          <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
-            Home
-          </Link>
-          <button
-            onClick={async () => {
-              await logout();
-              window.location.href = "/"; 
-            }}
-            className="text-gray-700 hover:text-blue-600 font-medium"
-          >
-            Sign Out
-          </button>
-        </div>
-      </nav>
-
       {/* Help content */}
       <div className="flex flex-col items-center mt-16 px-6">
         <h2 className="text-3xl font-semibold mb-4">Help & Support</h2>

@@ -167,24 +167,31 @@ export default function Navbar() {
       case 'admin':
         if (pathname?.includes('/admin')) {
           return [
-            { href: '/', label: 'Home' },
+            { href: '/home', label: 'Home' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
           ];
         } else if (pathname?.includes('/analytics')) {
           return [
-            { href: '/', label: 'Home' },
+            { href: '/home', label: 'Home' },
             { href: '/admin', label: 'Admin' },
             { href: '/guide', label: 'Guide' },
           ];
         } else if (pathname?.includes('/guide')) {
           return [
-            { href: '/', label: 'Home' },
+            { href: '/home', label: 'Home' },
             { href: '/admin', label: 'Admin' },
             { href: '/analytics', label: 'Analytics' },
           ];
+        } else if (pathname?.includes('/home')) {
+          return [
+            { href: '/admin', label: 'Admin' },
+            { href: '/analytics', label: 'Analytics' },
+            { href: '/guide', label: 'Guide' },
+          ];
         } else {
           return [
+            { href: '/home', label: 'Home' },
             { href: '/admin', label: 'Admin' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
@@ -195,16 +202,22 @@ export default function Navbar() {
         // Handles teacher, student, and other roles
         if (pathname?.includes('/analytics')) {
           return [
-            { href: '/', label: 'Home' },
+            { href: '/home', label: 'Home' },
             { href: '/guide', label: 'Guide' },
           ];
         } else if (pathname?.includes('/guide')) {
           return [
-            { href: '/', label: 'Home' },
+            { href: '/home', label: 'Home' },
             { href: '/analytics', label: 'Analytics' },
+          ];
+        } else if (pathname?.includes('/home')) {
+          return [
+            { href: '/analytics', label: 'Analytics' },
+            { href: '/guide', label: 'Guide' },
           ];
         } else {
           return [
+            { href: '/home', label: 'Home' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
           ];
@@ -223,11 +236,6 @@ export default function Navbar() {
         </div>
       </nav>
     );
-  }
-
-  // ✅ HIDE NAVBAR ON QUIZ PAGES
-  if (pathname?.startsWith('/quiz/') && pathname.split('/').length > 2) {
-    return null;
   }
 
   // ✅ HIDE NAVBAR IF NO USER (not logged in)

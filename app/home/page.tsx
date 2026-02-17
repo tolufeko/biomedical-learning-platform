@@ -27,38 +27,6 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 🔁 Extract navbar to avoid duplication
-  const renderNavbar = () => (
-    <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-      <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-      <div className="flex gap-6 items-center">
-        {username ? `${username}` : "Guest"}
-        {role === 'admin' && (
-          <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-            Admin View
-          </Link>
-        )}
-        {(role === 'teacher' || role === 'admin') && (
-          <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-            Teacher View
-          </Link>
-        )}
-        <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
-          Guide
-        </Link>
-        <button
-          onClick={async () => {
-            await logout();
-            window.location.href = '/';
-          }}
-          className="text-gray-700 hover:text-blue-600 font-medium"
-        >
-          Sign Out
-        </button>
-      </div>
-    </nav>
-  );
-
   // Access check
   useEffect(() => {
     if (authLoading) return;
@@ -99,7 +67,6 @@ export default function HomePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
-        {renderNavbar()}
         <main className="flex flex-col items-center justify-center mt-16 px-6">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -110,25 +77,8 @@ export default function HomePage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        {renderNavbar()}
-        <main className="flex flex-col items-center justify-center mt-16 px-6">
-          <div className="text-center text-red-600">
-            <div className="text-lg mb-4">{error}</div>
-            <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700">
-              Try Again
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {renderNavbar()}
       <main className="flex flex-col items-center justify-center mt-8 px-6">
         <h2 className="text-3xl font-semibold mb-4 text-gray-800">
           Welcome to your Biomedical Learning Hub

@@ -107,7 +107,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* Navbar */}
       <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
         <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
         <div className="flex gap-6 items-center">

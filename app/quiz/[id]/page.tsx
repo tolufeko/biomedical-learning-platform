@@ -1,9 +1,8 @@
 // app/quiz/[id]/page.tsx
 'use client';
 
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -599,35 +598,6 @@ export default function QuizPage() {
     
     return (
       <div className="min-h-screen bg-gray-50">
-        <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-          <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-          <div className="flex gap-6 items-center">
-            {username ? `${username}` : "Guest"}
-            {role === 'admin' && (
-              <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-                Admin View
-              </Link>
-            )}
-            {(role === 'teacher' || role === 'admin') && (
-              <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-                Teacher View
-              </Link>
-            )}
-            <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
-              Home
-            </Link>
-            <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
-              Guide
-            </Link>
-            <button onClick={async () => {
-              await logout();
-              router.push('/');
-            }} className="text-gray-700 hover:text-blue-600 font-medium">
-              Sign Out
-            </button>
-          </div>
-        </nav>
-
         <main className="flex flex-col items-center mt-8 px-6 pb-8">
           <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-8 text-center">
             <h2 className="text-3xl font-bold text-gray-800 mb-6">Quiz Completed!</h2>
@@ -740,35 +710,6 @@ export default function QuizPage() {
   
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-        <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-        <div className="flex gap-6 items-center">
-          {username ? `${username}` : "Guest"}
-          {role === 'admin' && (
-            <Link href="/admin" className="text-gray-700 hover:text-blue-600 font-medium">
-              Admin View
-            </Link>
-          )}
-          {(role === 'teacher' || role === 'admin') && (
-            <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-              Teacher View
-            </Link>
-          )}
-          <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
-            Home
-          </Link>
-          <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
-            Guide
-          </Link>
-          <button onClick={async () => {
-              await logout();
-              router.push('/');
-            }} className="text-gray-700 hover:text-blue-600 font-medium">
-            Sign Out
-          </button>
-        </div>
-      </nav>
-
       <main className="flex flex-col items-center mt-8 px-6 pb-8">
         <h2 className="text-3xl font-semibold mb-2 text-gray-800 text-center">
           {quizData.title}
