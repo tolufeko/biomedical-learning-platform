@@ -168,6 +168,7 @@ export default function Navbar() {
         if (pathname?.includes('/admin')) {
           return [
             { href: '/home', label: 'Home' },
+            { href: '/create-quiz', label: 'Create Quiz' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
           ];
@@ -175,16 +176,26 @@ export default function Navbar() {
           return [
             { href: '/home', label: 'Home' },
             { href: '/admin', label: 'Admin' },
+            { href: '/create-quiz', label: 'Create Quiz' },
             { href: '/guide', label: 'Guide' },
           ];
         } else if (pathname?.includes('/guide')) {
           return [
             { href: '/home', label: 'Home' },
             { href: '/admin', label: 'Admin' },
+            { href: '/create-quiz', label: 'Create Quiz' },
             { href: '/analytics', label: 'Analytics' },
           ];
         } else if (pathname?.includes('/home')) {
           return [
+            { href: '/admin', label: 'Admin' },
+            { href: '/create-quiz', label: 'Create Quiz' },
+            { href: '/analytics', label: 'Analytics' },
+            { href: '/guide', label: 'Guide' },
+          ];
+        } else if (pathname?.includes('/create-quiz')) {
+          return [
+            { href: '/home', label: 'Home' },
             { href: '/admin', label: 'Admin' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
@@ -193,6 +204,7 @@ export default function Navbar() {
           return [
             { href: '/home', label: 'Home' },
             { href: '/admin', label: 'Admin' },
+            { href: '/create-quiz', label: 'Create Quiz' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
           ];
@@ -203,21 +215,31 @@ export default function Navbar() {
         if (pathname?.includes('/analytics')) {
           return [
             { href: '/home', label: 'Home' },
+            { href: '/create-quiz', label: 'Create Quiz' },
             { href: '/guide', label: 'Guide' },
           ];
         } else if (pathname?.includes('/guide')) {
           return [
             { href: '/home', label: 'Home' },
+            { href: '/create-quiz', label: 'Create Quiz' },
             { href: '/analytics', label: 'Analytics' },
           ];
         } else if (pathname?.includes('/home')) {
           return [
+            { href: '/create-quiz', label: 'Create Quiz' },
+            { href: '/analytics', label: 'Analytics' },
+            { href: '/guide', label: 'Guide' },
+          ];
+        } else if (pathname?.includes('/create-quiz')) {
+          return [
+            { href: '/home', label: 'Home' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
           ];
         } else {
           return [
             { href: '/home', label: 'Home' },
+            { href: '/create-quiz', label: 'Create Quiz' },
             { href: '/analytics', label: 'Analytics' },
             { href: '/guide', label: 'Guide' },
           ];

@@ -107,31 +107,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-sm border-b">
-        <h1 className="text-2xl font-bold text-blue-600">BioLearn</h1>
-        <div className="flex gap-6 items-center">
-          {username || "Guest"}
-          <Link href="/teacher" className="text-gray-700 hover:text-blue-600 font-medium">
-            Teacher View
-          </Link>
-          <Link href="/home" className="text-gray-700 hover:text-blue-600 font-medium">
-            Home
-          </Link>
-          <Link href="/guide" className="text-gray-700 hover:text-blue-600 font-medium">
-            Guide
-          </Link>
-          <button
-            onClick={async () => {
-              await logout();
-              window.location.href = "/";
-            }}
-            className="text-gray-700 hover:text-blue-600 font-medium"
-          >
-            Sign Out
-          </button>
-        </div>
-      </nav>
-
       {/* User Management */}
       <div className="p-6 bg-white rounded-lg shadow-md mt-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">User Management</h2>
