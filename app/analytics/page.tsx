@@ -25,13 +25,20 @@ interface QuizStatistics {
   total_attempts: number; data_available: boolean;
 }
 
-const VIEW_MODES = [
+const PRIVILEGED_ROLES = ['teacher', 'admin'];
+
+const ALL_VIEW_MODES = [
   { key: 'general', label: 'All Students & Quizzes' },
   { key: 'quiz',    label: 'Specific Quiz' },
   { key: 'student', label: 'Specific Student' },
 ] as const;
 
-type ViewMode = typeof VIEW_MODES[number]['key'];
+const STUDENT_VIEW_MODES = [
+  { key: 'general', label: 'My Overall Stats' },
+  { key: 'quiz',    label: 'Specific Quiz' },
+] as const;
+
+type ViewMode = 'general' | 'quiz' | 'student';
 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function TeacherPage() {
@@ -43,6 +50,9 @@ export default function TeacherPage() {
   const [selectedQuizId, setSelectedQuizId] = useState('');
   const [selectedUserName, setSelectedUserName] = useState('');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  const isPrivileged = PRIVILEGED_ROLES.includes(role ?? '');
+  const viewModes = isPrivileged ? ALL_VIEW_MODES : STUDENT_VIEW_MODES;
 
   useEffect(() => {
     fetch('/api/quizzes')
@@ -56,7 +66,10 @@ export default function TeacherPage() {
     try {
       const params = new URLSearchParams();
       if (viewMode === 'quiz' && selectedQuizId) params.append('quiz_id', selectedQuizId);
-      if (viewMode === 'student' && selectedUserName) params.append('username', selectedUserName);
+      // Only privileged roles can filter by another student's username
+      if (isPrivileged && viewMode === 'student' && selectedUserName) {
+        params.append('username', selectedUserName);
+      }
       const res = await fetch(`/api/quiz-statistics${params.toString() ? `?${params}` : ''}`);
       setStats(await res.json());
     } catch {
@@ -66,6 +79,11 @@ export default function TeacherPage() {
       setAnalyticsLoading(false);
     }
   };
+
+  // Reset viewMode if role changes and current mode isn't available
+  useEffect(() => {
+    if (!isPrivileged && viewMode === 'student') setViewMode('general');
+  }, [role]);
 
   useEffect(() => { fetchStatistics(); }, [role, viewMode, selectedQuizId, selectedUserName]);
 
@@ -85,15 +103,17 @@ export default function TeacherPage() {
       <div className="max-w-6xl mx-auto p-6">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics</h1>
-          <p className="text-gray-600">Analyze student performance</p>
+          <p className="text-gray-600">
+            {isPrivileged ? 'Analyze student performance' : 'View your performance'}
+          </p>
         </div>
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-6">
-          {VIEW_MODES.map(({ key, label }) => (
+          {viewModes.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setViewMode(key)}
+              onClick={() => setViewMode(key as ViewMode)}
               className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
                 viewMode === key
                   ? 'border-blue-600 text-blue-600'
@@ -122,7 +142,7 @@ export default function TeacherPage() {
               </div>
             )}
 
-            {viewMode === 'student' && (
+            {isPrivileged && viewMode === 'student' && (
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Student Username</label>
                 <input
@@ -141,9 +161,9 @@ export default function TeacherPage() {
             ) : stats?.data_available ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { label: 'Avg. Score',      value: `${stats.average_score}%`,  color: 'blue' },
-                  { label: 'Avg. Time (sec)', value: stats.average_time_spent,    color: 'green' },
-                  { label: 'Total Attempts',  value: stats.total_attempts,        color: 'purple' },
+                  { label: 'Avg. Score',      value: `${stats.average_score}%`, color: 'blue' },
+                  { label: 'Avg. Time (sec)', value: stats.average_time_spent,   color: 'green' },
+                  { label: 'Total Attempts',  value: stats.total_attempts,       color: 'purple' },
                 ].map(({ label, value, color }) => (
                   <div key={label} className={`bg-${color}-50 p-4 rounded-lg text-center`}>
                     <p className="text-sm text-gray-600">{label}</p>

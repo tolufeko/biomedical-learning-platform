@@ -1,3 +1,4 @@
+//app/api/quiz-analytics/route.ts
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';

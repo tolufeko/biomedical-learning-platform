@@ -1,3 +1,4 @@
+//app/api/quiz-statistics/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/auth-helpers-nextjs';
@@ -154,9 +155,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // 🔑 CRITICAL: ENFORCE STUDENT SELF-FILTERING
     // If student makes request WITHOUT user filter, automatically filter to themselves
-    if (currentUserRole === 'student' && !resolvedUserId) {
+    if (['student', 'guest'].includes(currentUserRole ?? '') && !resolvedUserId) {
       resolvedUserId = currentUser.id;
     }
 
