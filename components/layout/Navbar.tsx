@@ -210,8 +210,7 @@ export default function Navbar() {
           ];
         }
 
-      default:
-        // Handles teacher, student, and other roles
+      case 'teacher':
         if (pathname?.includes('/analytics')) {
           return [
             { href: '/home', label: 'Home' },
@@ -244,6 +243,32 @@ export default function Navbar() {
             { href: '/guide', label: 'Guide' },
           ];
         }
+
+      default:
+        // Handles teacher, student, and other roles
+        if (pathname?.includes('/analytics')) {
+          return [
+            { href: '/home', label: 'Home' },
+            { href: '/guide', label: 'Guide' },
+          ];
+        } else if (pathname?.includes('/guide')) {
+          return [
+            { href: '/home', label: 'Home' },
+            { href: '/analytics', label: 'Analytics' },
+          ];
+        } else if (pathname?.includes('/home')) {
+          return [
+            { href: '/analytics', label: 'Analytics' },
+            { href: '/guide', label: 'Guide' },
+          ];
+        } else {
+          return [
+            { href: '/home', label: 'Home' },
+            { href: '/analytics', label: 'Analytics' },
+            { href: '/guide', label: 'Guide' },
+          ];
+        }
+      
     }
   }, [user, profile, pathname]);
 
