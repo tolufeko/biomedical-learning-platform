@@ -1,4 +1,4 @@
-// app/teacher/page.tsx
+// app/create-quiz/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
