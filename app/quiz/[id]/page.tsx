@@ -10,7 +10,6 @@ import { useAuth } from "@/lib/AuthContext";
 
 interface HotspotAnswer { x: number; y: number; }
 
-// ── Graph Feature types ──────────────────────────────────────────────────────
 interface EquationEntry {
   id: string;
   expr: string;
@@ -37,25 +36,11 @@ interface GraphStudentAnswer {
   x: string;
   y: string;
 }
-// ────────────────────────────────────────────────────────────────────────────
 
-function isStringArray(value: any): value is string[] {
-  return Array.isArray(value) && value.every(item => typeof item === 'string');
-}
-function isHotspotArray(value: any): value is HotspotAnswer[] {
-  return Array.isArray(value) && value.every(item =>
-    typeof item === 'object' && item !== null && 'x' in item && 'y' in item &&
-    typeof item.x === 'number' && typeof item.y === 'number'
-  );
-}
 function isHotspotAnswer(obj: any): obj is HotspotAnswer {
   return obj && typeof obj === 'object' && 'x' in obj && 'y' in obj;
 }
-function isGraphFeatureData(val: any): val is GraphFeatureData {
-  return val !== null && typeof val === 'object' && 'equations' in val && 'features' in val;
-}
 
-// Migrate quizzes saved with old single-equation shape
 function normaliseGraphFeatureData(raw: any): GraphFeatureData {
   if (!raw) return { equations: [{ id: 'eq0', expr: '', color: '#6366f1' }], xMin: -10, xMax: 10, yMin: -10, yMax: 10, features: [] };
   if (!raw.equations && raw.equation !== undefined) {
@@ -93,7 +78,6 @@ interface QuizData {
   questions: QuizQuestion[];
 }
 
-// ── Answer state union ────────────────────────────────────────────────────────
 interface TextAnswerState       { type: 'text';           userAnswer: string | null; }
 interface ChoiceAnswerState     { type: 'multiple-choice' | 'checkbox'; userAnswer: string[] | null; }
 interface HotspotAnswerState    { type: 'hotspot';        userAnswer: HotspotAnswer[] | null; }
@@ -106,6 +90,126 @@ interface QuestionState {
   isCorrect: boolean | null;
   showSolution: boolean;
   startTime: number;
+  // ✅ NEW: record when each question was submitted so we can compute time spent
+  endTime: number | null;
+}
+
+// =============== FEEDBACK HELPERS ===============
+
+// Converts a question's correct_answer to a human-readable string for the AI prompt
+function formatCorrectAnswerForFeedback(question: QuizQuestion): string {
+  if (question.question_type === 'text') return question.correct_answer;
+  if (question.question_type === 'multiple-choice' || question.question_type === 'checkbox')
+    return question.correct_answer.join(', ');
+  if (question.question_type === 'hotspot')
+    return question.correct_answer.map(s => `(${Math.round(s.x)}%, ${Math.round(s.y)}%)`).join(' | ');
+  if (question.question_type === 'graph_feature') {
+    const ca = question.correct_answer;
+    const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
+    return gf ? gf.features.map(f => `(${f.x}, ${f.y})`).join(' | ') : '—';
+  }
+  return '—';
+}
+
+// Converts a QuestionState's answer to a human-readable string for the AI prompt
+function formatAnswerForFeedback(question: QuizQuestion, state: QuestionState): string {
+  const as = state.answerState;
+  if (as.type === 'text') return as.userAnswer || 'No answer';
+  if (as.type === 'multiple-choice' || as.type === 'checkbox')
+    return as.userAnswer?.join(', ') || 'No answer';
+  if (as.type === 'hotspot')
+    return as.userAnswer?.map(s => `(${Math.round(s.x)}%, ${Math.round(s.y)}%)`).join(' | ') || 'No answer';
+  if (as.type === 'graph_feature')
+    return as.userAnswer?.map(a => `(${a.x || '?'}, ${a.y || '?'})`).join(' | ') || 'No answer';
+  return 'No answer';
+}
+
+// ── Simple markdown renderer (bold, headings, line breaks — no library needed) ─
+function renderMarkdown(text: string): React.ReactElement {
+  const lines = text.split('\n');
+  const elements: React.ReactElement[] = [];
+  let key = 0;
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      elements.push(
+        <h3 key={key++} className="text-base font-bold text-gray-800 mt-5 mb-1 first:mt-0">
+          {line.slice(3)}
+        </h3>
+      );
+    } else if (line.trim() === '') {
+      elements.push(<div key={key++} className="h-1" />);
+    } else {
+      // Handle **bold** inline
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      elements.push(
+        <p key={key++} className="text-sm text-gray-700 leading-relaxed">
+          {parts.map((part, i) =>
+            part.startsWith('**') && part.endsWith('**')
+              ? <strong key={i} className="font-semibold text-gray-800">{part.slice(2, -2)}</strong>
+              : part
+          )}
+        </p>
+      );
+    }
+  }
+
+  return <>{elements}</>;
+}
+
+// ── Standard feedback computation ─────────────────────────────────────────────
+interface StandardFeedback {
+  scoreMessage: string;
+  scoreEmoji: string;
+  slowQuestions: { text: string; seconds: number }[];
+  byType: { type: string; correct: number; total: number }[];
+  mostMissed: { text: string; attempts: number } | null;
+}
+
+function computeStandardFeedback(
+  questions: QuizQuestion[],
+  states: QuestionState[]
+): StandardFeedback {
+  const score = states.filter(s => s.isCorrect).length / questions.length * 100;
+
+  const scoreMessage =
+    score >= 90 ? 'Outstanding work!' :
+    score >= 80 ? 'Great performance!' :
+    score >= 70 ? 'Solid effort — a little more practice and you\'ll nail it.' :
+    score >= 60 ? 'You\'re getting there — review the questions you missed.' :
+    'Keep going — every attempt builds understanding.';
+
+  const scoreEmoji =
+    score >= 90 ? '🏆' : score >= 80 ? '🎉' : score >= 70 ? '👍' : score >= 60 ? '📚' : '💪';
+
+  // Questions that took more than 45 seconds
+  const slowQuestions = questions
+    .map((q, i) => {
+      const spent = states[i].endTime
+        ? Math.round((states[i].endTime! - states[i].startTime) / 1000)
+        : 0;
+      return { text: q.question_text, seconds: spent };
+    })
+    .filter(q => q.seconds > 45)
+    .sort((a, b) => b.seconds - a.seconds)
+    .slice(0, 3);
+
+  // Performance by question type
+  const typeMap: Record<string, { correct: number; total: number }> = {};
+  questions.forEach((q, i) => {
+    if (!typeMap[q.question_type]) typeMap[q.question_type] = { correct: 0, total: 0 };
+    typeMap[q.question_type].total++;
+    if (states[i].isCorrect) typeMap[q.question_type].correct++;
+  });
+  const byType = Object.entries(typeMap).map(([type, counts]) => ({ type, ...counts }));
+
+  // Most-missed question (wrong answer with most attempts — here just first wrong)
+  const wrongOnes = questions.filter((_, i) => !states[i].isCorrect);
+  const mostMissed = wrongOnes.length > 0
+    ? { text: wrongOnes[0].question_text, attempts: 1 }
+    : null;
+
+  return { scoreMessage, scoreEmoji, slowQuestions, byType, mostMissed };
 }
 
 // =============== GRAPH HELPERS ===============
@@ -167,7 +271,6 @@ function drawEquation(
   ctx.stroke();
 }
 
-// ── Graph canvas (student view) ───────────────────────────────────────────────
 function GraphCanvas({
   data,
   studentAnswers,
@@ -191,11 +294,9 @@ function GraphCanvas({
     const toX = (x: number) => pad + ((x - data.xMin) / (data.xMax - data.xMin)) * (W - 2 * pad);
     const toY = (y: number) => H - pad - ((y - data.yMin) / (data.yMax - data.yMin)) * (H - 2 * pad);
 
-    // Background
     ctx.fillStyle = '#f9fafb';
     ctx.fillRect(0, 0, W, H);
 
-    // Grid
     ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
     for (let x = Math.ceil(data.xMin); x <= data.xMax; x++) {
       ctx.beginPath(); ctx.moveTo(toX(x), pad); ctx.lineTo(toX(x), H - pad); ctx.stroke();
@@ -204,7 +305,6 @@ function GraphCanvas({
       ctx.beginPath(); ctx.moveTo(pad, toY(y)); ctx.lineTo(W - pad, toY(y)); ctx.stroke();
     }
 
-    // Axes
     ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 2;
     const zy = (data.yMin <= 0 && data.yMax >= 0) ? toY(0) : H - pad;
     const zx = (data.xMin <= 0 && data.xMax >= 0) ? toX(0) : pad;
@@ -212,12 +312,10 @@ function GraphCanvas({
     ctx.beginPath(); ctx.moveTo(pad, zy); ctx.lineTo(W - pad, zy); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(zx, H - pad); ctx.lineTo(zx, pad); ctx.stroke();
 
-    // Axis arrows
     ctx.fillStyle = '#1f2937';
     ctx.beginPath(); ctx.moveTo(W - pad, zy); ctx.lineTo(W - pad - 8, zy - 4); ctx.lineTo(W - pad - 8, zy + 4); ctx.fill();
     ctx.beginPath(); ctx.moveTo(zx, pad); ctx.lineTo(zx - 4, pad + 8); ctx.lineTo(zx + 4, pad + 8); ctx.fill();
 
-    // Tick labels
     ctx.fillStyle = '#6b7280'; ctx.font = '11px monospace';
     ctx.textAlign = 'center';
     for (let x = Math.ceil(data.xMin); x <= data.xMax; x++) {
@@ -230,19 +328,16 @@ function GraphCanvas({
       ctx.fillText(String(y), zx - 6, toY(y) + 4);
     }
 
-    // Axis letter labels
     ctx.fillStyle = '#374151'; ctx.font = 'italic 13px serif';
     ctx.textAlign = 'center';
     ctx.fillText('x', W - pad + 16, zy + 4);
     ctx.fillText('y', zx + 4, pad - 12);
 
-    // Equation curves
     (data.equations ?? []).forEach(eq => {
       if (!eq.expr) return;
       drawEquation(ctx, { expr: eq.expr, color: eq.color }, toX, toY, data.xMin, data.xMax, data.yMin, data.yMax, W, pad);
     });
 
-    // Custom axis labels
     if (data.xLabel) {
       ctx.fillStyle = '#374151'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(data.xLabel, W / 2, H - 4);
@@ -256,12 +351,11 @@ function GraphCanvas({
       ctx.restore();
     }
 
-    // Student answer dots — order-independent colouring
     const usedForDots = new Set<number>();
     studentAnswers.forEach(sa => {
       const sx = parseFloat(sa.x), sy = parseFloat(sa.y);
       if (isNaN(sx) || isNaN(sy)) return;
-      let colour = '#3b82f6'; // blue = pending
+      let colour = '#3b82f6';
       if (submitted) {
         const matchIdx = data.features.findIndex((f, i) =>
           !usedForDots.has(i) && sx === Number(f.x) && sy === Number(f.y)
@@ -274,11 +368,10 @@ function GraphCanvas({
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
     });
 
-    // Correct answer dots for unmatched coords on solution reveal
     if (showSolution) {
       data.features.forEach((f, i) => {
         if (f.x === '' || f.y === '') return;
-        if (usedForDots.has(i)) return; // already matched green
+        if (usedForDots.has(i)) return;
         ctx.beginPath(); ctx.arc(toX(Number(f.x)), toY(Number(f.y)), 8, 0, Math.PI * 2);
         ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2.5;
         ctx.setLineDash([4, 2]); ctx.stroke(); ctx.setLineDash([]);
@@ -296,7 +389,6 @@ function GraphCanvas({
   );
 }
 
-// ── GraphFeatureQuestionView — the student UI for graph_feature ───────────────
 function GraphFeatureQuestionView({
   question,
   questionState,
@@ -306,7 +398,6 @@ function GraphFeatureQuestionView({
   questionState: QuestionState | undefined;
   onAnswerChange: (answers: GraphStudentAnswer[]) => void;
 }) {
-  // Parse correct_answer — may arrive as JSON string or plain object
   const graphData: GraphFeatureData | null = (() => {
     const ca = question.correct_answer;
     return normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
@@ -315,7 +406,6 @@ function GraphFeatureQuestionView({
   const submitted = questionState?.isSubmitted ?? false;
   const showSol = questionState?.showSolution ?? false;
 
-  // Initialise student answers from state or blank
   const studentAnswers: GraphStudentAnswer[] = (() => {
     if (questionState?.answerState.type === 'graph_feature') {
       return questionState.answerState.userAnswer ?? (graphData?.features.map(f => ({ id: f.id, x: '', y: '' })) ?? []);
@@ -332,8 +422,6 @@ function GraphFeatureQuestionView({
     onAnswerChange(updated);
   };
 
-  // Order-independent: a student answer is correct if it matches any correct coordinate
-  // that hasn't already been claimed by an earlier (correct) answer
   const matchedCorrectIndices = (() => {
     const used = new Set<number>();
     const result: (number | null)[] = [];
@@ -354,28 +442,22 @@ function GraphFeatureQuestionView({
     return matchedCorrectIndices[saIndex] !== null;
   };
 
-  // Correct coords not yet matched by any student answer (for solution reveal)
   const unmatchedCorrect = graphData.features.filter((_, i) =>
     !matchedCorrectIndices.includes(i)
   );
 
   return (
     <div className="space-y-5">
-      {/* Graph */}
       <GraphCanvas
         data={graphData}
         studentAnswers={studentAnswers}
         submitted={submitted}
         showSolution={showSol}
       />
-
-
       <p className="text-xs text-gray-400 italic">
         Enter the coordinates for each feature below.
         {!submitted && ' Your answers will appear as blue dots on the graph.'}
       </p>
-
-      {/* Input fields */}
       <div className="space-y-3">
         {studentAnswers.map((sa, idx) => {
           const result = getResult(idx);
@@ -425,7 +507,6 @@ function GraphFeatureQuestionView({
             </div>
           );
         })}
-        {/* Show unmatched correct answers on solution reveal */}
         {showSol && unmatchedCorrect.length > 0 && (
           <div className="rounded-xl border border-green-300 bg-green-50 p-4">
             <p className="text-xs font-semibold text-green-800 mb-2">Missing answers:</p>
@@ -451,6 +532,13 @@ export default function QuizPage() {
   const [showResults, setShowResults] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ── AI feedback state ────────────────────────────────────────────────────────
+  const [aiFeedback, setAiFeedback] = useState('');
+  const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
+  const [aiFeedbackRequested, setAiFeedbackRequested] = useState(false);
+  const [aiFeedbackError, setAiFeedbackError] = useState<string | null>(null);
+
   const { user, role, username, loading: authLoading } = useAuth();
 
   const questions = quizData?.questions || [];
@@ -459,7 +547,6 @@ export default function QuizPage() {
   const currentQuestionState = questionStates[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
 
-  // ── hasUserAnswer ────────────────────────────────────────────────────────────
   const hasUserAnswer = (state: QuestionState | undefined): boolean => {
     if (!state?.answerState) return false;
     const { answerState } = state;
@@ -469,7 +556,6 @@ export default function QuizPage() {
     if (answerState.type === 'hotspot')
       return Array.isArray(answerState.userAnswer) && answerState.userAnswer.length > 0;
     if (answerState.type === 'graph_feature')
-      // require all features to have both x and y filled
       return Array.isArray(answerState.userAnswer) &&
         answerState.userAnswer.length > 0 &&
         answerState.userAnswer.every(a => a.x.trim() !== '' && a.y.trim() !== '');
@@ -493,13 +579,65 @@ export default function QuizPage() {
     } catch (err) { console.error('Error saving analytics:', err); }
   };
 
+  // ── AI feedback fetch ────────────────────────────────────────────────────────
+  const fetchAiFeedback = async () => {
+    setAiFeedbackLoading(true);
+    setAiFeedbackRequested(true);
+    setAiFeedbackError(null);
+    setAiFeedback('');
+
+    try {
+      const score = calculateScore();
+      const payload = {
+        quizTitle: quizData!.title,
+        score: score.percentage,
+        questions: questions.map((q, i) => ({
+          questionText: q.question_text,
+          questionType: q.question_type,
+          correct: questionStates[i]?.isCorrect ?? false,
+          userAnswer: formatAnswerForFeedback(q, questionStates[i]),
+          correctAnswer: formatCorrectAnswerForFeedback(q),
+          timeSpent: questionStates[i]?.endTime
+            ? Math.round((questionStates[i].endTime! - questionStates[i].startTime) / 1000)
+            : 0,
+        })),
+      };
+
+      const response = await fetch('/api/quiz-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        setAiFeedbackError(err.error || 'Failed to generate feedback.');
+        setAiFeedbackLoading(false);
+        return;
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setAiFeedback(prev => prev + decoder.decode(value, { stream: true }));
+      }
+    } catch {
+      setAiFeedbackError('Something went wrong. Please try again.');
+    } finally {
+      setAiFeedbackLoading(false);
+    }
+  };
+
   // Access check
   useEffect(() => {
     if (authLoading) return;
     if (!user) router.push("/");
   }, [user, role, authLoading, router]);
 
-  // ── Init question states ─────────────────────────────────────────────────────
+  // Init question states
   useEffect(() => {
     if (questions.length === 0) return;
     const initialStates: QuestionState[] = questions.map(q => {
@@ -509,19 +647,18 @@ export default function QuizPage() {
           answerState = { type: 'text', userAnswer: null };
           break;
         case 'multiple-choice':
-        case 'checkbox':
           answerState = { type: 'multiple-choice', userAnswer: null };
+          break;
+        case 'checkbox':
+          // ✅ Fixed: was incorrectly typed as 'multiple-choice'
+          answerState = { type: 'checkbox', userAnswer: null };
           break;
         case 'hotspot':
           answerState = { type: 'hotspot', userAnswer: null };
           break;
         case 'graph_feature': {
-          // Pre-populate blank answers for each feature
-          const gf: GraphFeatureData | null = (() => {
-            const ca = (q as GraphFeatureQuestion).correct_answer;
-            return normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca); //
-            return null;
-          })();
+          const ca = (q as GraphFeatureQuestion).correct_answer;
+          const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
           answerState = {
             type: 'graph_feature',
             userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [],
@@ -531,12 +668,12 @@ export default function QuizPage() {
         default:
           answerState = { type: 'text', userAnswer: null };
       }
-      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, startTime: Date.now() };
+      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, startTime: Date.now(), endTime: null };
     });
     setQuestionStates(initialStates);
   }, [questions.length]);
 
-  // ── Fetch quiz ───────────────────────────────────────────────────────────────
+  // Fetch quiz
   useEffect(() => {
     if (!id) return;
     const fetchQuiz = async () => {
@@ -607,7 +744,6 @@ export default function QuizPage() {
     setQuestionStates(newStates);
   };
 
-  // ── New: graph feature answer change ─────────────────────────────────────────
   const handleGraphFeatureAnswerChange = (answers: GraphStudentAnswer[]) => {
     if (currentQuestionState?.isSubmitted) return;
     const newStates = [...questionStates];
@@ -618,15 +754,13 @@ export default function QuizPage() {
     }
   };
 
-  // ── Grade ────────────────────────────────────────────────────────────────────
   const gradeQuestion = (question: QuizQuestion, state: QuestionState): boolean => {
     if (question.question_type === 'graph_feature' && state.answerState.type === 'graph_feature') {
       const ca = question.correct_answer;
-      const gf: GraphFeatureData | null = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
+      const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
       if (!gf) return false;
       const answers = state.answerState.userAnswer || [];
       if (answers.length !== gf.features.length) return false;
-      // Order-independent: each student answer must match a distinct correct coordinate
       const usedCorrect = new Set<number>();
       for (const sa of answers) {
         const sx = parseFloat(sa.x), sy = parseFloat(sa.y);
@@ -675,27 +809,58 @@ export default function QuizPage() {
   const submitAnswer = async () => {
     if (!currentQuestion || !currentQuestionState || !hasUserAnswer(currentQuestionState)) return;
     const isCorrect = gradeQuestion(currentQuestion, currentQuestionState);
-    const timeSpent = Date.now() - currentQuestionState.startTime;
+    const now = Date.now();
+    const timeSpent = now - currentQuestionState.startTime;
     await saveAnalytics(currentQuestion.question_assignment_id, isCorrect, timeSpent);
     const newStates = [...questionStates];
-    newStates[currentQuestionIndex] = { ...newStates[currentQuestionIndex], isSubmitted: true, isCorrect, showSolution: false };
+    // ✅ Record endTime on submit
+    newStates[currentQuestionIndex] = {
+      ...newStates[currentQuestionIndex],
+      isSubmitted: true,
+      isCorrect,
+      showSolution: false,
+      endTime: now,
+    };
     setQuestionStates(newStates);
   };
 
   const retryQuestion = () => {
     const newStates = [...questionStates];
-    // Reset the answer for graph_feature back to blank too
     const q = questions[currentQuestionIndex];
-    let freshAnswer: AnswerState = { type: 'text', userAnswer: null };
-    if (q.question_type === 'graph_feature') {
-      const ca = (q as GraphFeatureQuestion).correct_answer;
-      const gf: GraphFeatureData | null = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
-      freshAnswer = { type: 'graph_feature', userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [] };
+    let freshAnswer: AnswerState;
+
+    // ✅ Fixed: all question types get a fresh answer on retry, not just graph_feature
+    switch (q.question_type) {
+      case 'text':
+        freshAnswer = { type: 'text', userAnswer: null };
+        break;
+      case 'multiple-choice':
+        freshAnswer = { type: 'multiple-choice', userAnswer: null };
+        break;
+      case 'checkbox':
+        freshAnswer = { type: 'checkbox', userAnswer: null };
+        break;
+      case 'hotspot':
+        freshAnswer = { type: 'hotspot', userAnswer: null };
+        break;
+      case 'graph_feature': {
+        const ca = (q as GraphFeatureQuestion).correct_answer;
+        const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
+        freshAnswer = { type: 'graph_feature', userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [] };
+        break;
+      }
+      default:
+        freshAnswer = { type: 'text', userAnswer: null };
     }
+
     newStates[currentQuestionIndex] = {
       ...newStates[currentQuestionIndex],
-      answerState: q.question_type === 'graph_feature' ? freshAnswer : newStates[currentQuestionIndex].answerState,
-      isSubmitted: false, isCorrect: null, showSolution: false, startTime: Date.now(),
+      answerState: freshAnswer,
+      isSubmitted: false,
+      isCorrect: null,
+      showSolution: false,
+      startTime: Date.now(),
+      endTime: null,
     };
     setQuestionStates(newStates);
   };
@@ -721,14 +886,15 @@ export default function QuizPage() {
 
   const finishQuiz = async () => {
     const newStates = [...questionStates];
+    const now = Date.now();
     for (let i = 0; i < questions.length; i++) {
       const question = questions[i];
       const state = newStates[i];
       if (!question.question_assignment_id) continue;
       if (!state.isSubmitted) {
         const isCorrect = hasUserAnswer(state) ? gradeQuestion(question, state) : false;
-        await saveAnalytics(question.question_assignment_id, isCorrect, Date.now() - state.startTime);
-        newStates[i] = { ...state, isSubmitted: true, isCorrect, showSolution: false };
+        await saveAnalytics(question.question_assignment_id, isCorrect, now - state.startTime);
+        newStates[i] = { ...state, isSubmitted: true, isCorrect, showSolution: false, endTime: now };
       }
     }
     setQuestionStates(newStates);
@@ -736,18 +902,23 @@ export default function QuizPage() {
   };
 
   const restartQuiz = () => {
+    setAiFeedback('');
+    setAiFeedbackRequested(false);
+    setAiFeedbackError(null);
     setQuestionStates(questions.map(q => {
       let answerState: AnswerState = { type: 'text', userAnswer: null };
-      if (q.question_type === 'multiple-choice' || q.question_type === 'checkbox')
+      if (q.question_type === 'multiple-choice')
         answerState = { type: 'multiple-choice', userAnswer: null };
+      else if (q.question_type === 'checkbox')
+        answerState = { type: 'checkbox', userAnswer: null };
       else if (q.question_type === 'hotspot')
         answerState = { type: 'hotspot', userAnswer: null };
       else if (q.question_type === 'graph_feature') {
         const ca = (q as GraphFeatureQuestion).correct_answer;
-        const gf: GraphFeatureData | null = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
+        const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
         answerState = { type: 'graph_feature', userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [] };
       }
-      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, startTime: Date.now() };
+      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, startTime: Date.now(), endTime: null };
     }));
     setCurrentQuestionIndex(0);
     setShowResults(false);
@@ -781,30 +952,142 @@ export default function QuizPage() {
 
   if (showResults) {
     const score = calculateScore();
+    const feedback = computeStandardFeedback(questions, questionStates);
+
     return (
       <div className="min-h-screen bg-gray-50">
-        <main className="flex flex-col items-center mt-8 px-6 pb-8">
-          <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-8 text-center">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quiz Completed!</h2>
-            <div className="mb-8">
-              <div className={`text-6xl font-bold mb-4 ${score.percentage >= 80 ? 'text-green-600' : score.percentage >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
-                {score.percentage}%
+        <main className="flex flex-col items-center mt-8 px-6 pb-16">
+
+          {/* ── Score hero ── */}
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-md p-8 text-center mb-6">
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">Quiz Complete</h2>
+            <div className={`text-7xl font-bold mb-3 ${
+              score.percentage >= 80 ? 'text-green-600' :
+              score.percentage >= 60 ? 'text-yellow-600' : 'text-red-500'
+            }`}>
+              {score.percentage}%
+            </div>
+            <p className="text-gray-500 mb-1">{score.correct} / {score.total} correct</p>
+            <p className="text-lg font-medium text-gray-700">
+              {feedback.scoreEmoji} {feedback.scoreMessage}
+            </p>
+          </div>
+
+          {/* ── Standard feedback panels ── */}
+          <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+
+            {/* Performance by question type */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">By Question Type</h3>
+              <div className="space-y-2">
+                {feedback.byType.map(({ type, correct, total }) => {
+                  const pct = Math.round((correct / total) * 100);
+                  return (
+                    <div key={type}>
+                      <div className="flex justify-between text-sm mb-0.5">
+                        <span className="text-gray-600 capitalize">{type.replace('-', ' ')}</span>
+                        <span className={`font-medium ${pct >= 70 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
+                          {correct}/{total}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full transition-all ${pct >= 70 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="text-xl text-gray-600">You got {score.correct} out of {score.total} questions correct</p>
-            </div>
-            <div className="mb-8 p-4 rounded-lg bg-gray-50">
-              <p className="text-lg font-medium text-gray-800">
-                {score.percentage >= 90 ? 'Excellent! 🎉' : score.percentage >= 80 ? 'Great job! 👍' : score.percentage >= 70 ? 'Good work! 😊' : score.percentage >= 60 ? 'Not bad! 📚' : 'Keep practicing! 💪'}
-              </p>
-            </div>
-            <div className="flex gap-4 justify-center flex-wrap">
-              <button onClick={restartQuiz} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Retry Quiz</button>
-              <Link href="/home" className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700">Back to Home</Link>
             </div>
 
-            <details className="mt-8 text-left">
-              <summary className="cursor-pointer font-semibold text-gray-700 text-lg">Review Your Answers</summary>
-              <div className="mt-4 space-y-4">
+            {/* Timing insights */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Time Insights</h3>
+              {feedback.slowQuestions.length === 0 ? (
+                <p className="text-sm text-gray-500">You answered all questions promptly. ⚡</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-400 mb-2">Questions that took over 45 seconds:</p>
+                  {feedback.slowQuestions.map((q, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-orange-400 text-xs mt-0.5">⏱</span>
+                      <div>
+                        <p className="text-xs text-gray-700 line-clamp-2">{q.text}</p>
+                        <p className="text-xs text-orange-500 font-medium">{q.seconds}s</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── AI Feedback section ── */}
+          <div className="w-full max-w-2xl mb-6">
+            {!aiFeedbackRequested ? (
+              <button
+                onClick={fetchAiFeedback}
+                className="w-full py-4 rounded-2xl font-semibold text-white text-base
+                  bg-gradient-to-r from-violet-600 to-indigo-600
+                  hover:from-violet-700 hover:to-indigo-700
+                  shadow-md hover:shadow-lg transition-all active:scale-[0.98]
+                  flex items-center justify-center gap-2"
+              >
+                <span className="text-xl">✨</span>
+                Get personalised AI feedback
+              </button>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-indigo-100 overflow-hidden">
+                <div className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-violet-50 to-indigo-50 border-b border-indigo-100">
+                  <span className="text-lg">✨</span>
+                  <h3 className="text-sm font-semibold text-indigo-800">AI Feedback</h3>
+                  {aiFeedbackLoading && (
+                    <span className="ml-auto flex items-center gap-1 text-xs text-indigo-400">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                  )}
+                </div>
+                <div className="p-5 min-h-[80px]">
+                  {aiFeedbackError ? (
+                    <div className="flex items-start gap-2 text-red-600">
+                      <span>⚠️</span>
+                      <p className="text-sm">{aiFeedbackError}</p>
+                    </div>
+                  ) : aiFeedback ? (
+                    <div className="prose-sm">{renderMarkdown(aiFeedback)}</div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Generating your personalised feedback…</p>
+                  )}
+                  {/* Blinking cursor while streaming */}
+                  {aiFeedbackLoading && aiFeedback && (
+                    <span className="inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Actions ── */}
+          <div className="flex gap-3 flex-wrap justify-center mb-8">
+            <button onClick={restartQuiz} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 shadow-sm">
+              Retry Quiz
+            </button>
+            <Link href="/home" className="px-6 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 shadow-sm">
+              Back to Home
+            </Link>
+          </div>
+
+          {/* ── Detailed answer review ── */}
+          <div className="w-full max-w-2xl">
+            <details className="bg-white rounded-2xl shadow-sm border border-gray-100">
+              <summary className="cursor-pointer px-6 py-4 font-semibold text-gray-700 text-base select-none hover:bg-gray-50 rounded-2xl">
+                Review Your Answers
+              </summary>
+              <div className="px-6 pb-6 pt-2 space-y-3">
                 {questions.map((question, index) => {
                   const state = questionStates[index];
                   let userAnswerDisplay = 'No answer';
@@ -816,30 +1099,44 @@ export default function QuizPage() {
                       ? answers.map(a => `(${a.x || '?'}, ${a.y || '?'})`).join(' | ')
                       : 'No answer';
                     const gfCa = question.correct_answer;
-                    const gf: GraphFeatureData | null = normaliseGraphFeatureData(typeof gfCa === 'string' ? (() => { try { return JSON.parse(gfCa); } catch { return null; } })() : gfCa);
+                    const gf = normaliseGraphFeatureData(typeof gfCa === 'string' ? (() => { try { return JSON.parse(gfCa); } catch { return null; } })() : gfCa);
                     correctAnswerDisplay = gf ? gf.features.map(f => `(${f.x}, ${f.y})`).join(' | ') : '—';
                   } else if (question.question_type === 'hotspot') {
                     const spots = state.answerState.type === 'hotspot' ? state.answerState.userAnswer || [] : [];
                     userAnswerDisplay = spots.length > 0 ? spots.map(s => `(${Math.round(s.x)}%,${Math.round(s.y)}%)`).join(', ') : 'No answer';
                     correctAnswerDisplay = question.correct_answer.map(s => `(${Math.round(s.x)}%,${Math.round(s.y)}%)`).join(', ');
                   } else if (question.question_type === 'multiple-choice' || question.question_type === 'checkbox') {
-                    userAnswerDisplay = state.answerState.type === 'multiple-choice' ? (state.answerState.userAnswer?.join(', ') || 'No answer') : 'No answer';
+                    userAnswerDisplay = state.answerState.type === 'multiple-choice' || state.answerState.type === 'checkbox'
+                      ? (state.answerState.userAnswer?.join(', ') || 'No answer') : 'No answer';
                     correctAnswerDisplay = question.correct_answer.join(', ');
                   } else if (question.question_type === 'text') {
                     userAnswerDisplay = state.answerState.type === 'text' ? (state.answerState.userAnswer || 'No answer') : 'No answer';
                     correctAnswerDisplay = question.correct_answer;
                   }
 
+                  const timeSpent = state.endTime
+                    ? Math.round((state.endTime - state.startTime) / 1000)
+                    : null;
+
                   return (
-                    <div key={index} className="p-4 border rounded-lg bg-gray-50">
-                      <div className="flex items-start gap-3 mb-2">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 ${state.isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
+                    <div key={index} className="p-4 border border-gray-100 rounded-xl bg-gray-50">
+                      <div className="flex items-start gap-3">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 mt-0.5 ${state.isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
                           {state.isCorrect ? '✓' : '✗'}
                         </span>
-                        <div>
-                          <p className="font-medium">Question {index + 1}: {question.question_text}</p>
-                          <p className="text-sm text-gray-600 mt-1">Your answer: <span className={state.isCorrect ? 'text-green-600' : 'text-red-600'}>{userAnswerDisplay}</span></p>
-                          <p className="text-sm text-gray-600">Correct answer: {correctAnswerDisplay}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-gray-800">Q{index + 1}: {question.question_text}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Your answer: <span className={state.isCorrect ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{userAnswerDisplay}</span>
+                          </p>
+                          {!state.isCorrect && (
+                            <p className="text-xs text-gray-500">
+                              Correct: <span className="text-green-600 font-medium">{correctAnswerDisplay}</span>
+                            </p>
+                          )}
+                          {timeSpent !== null && (
+                            <p className="text-xs text-gray-400 mt-1">⏱ {timeSpent}s</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -848,6 +1145,7 @@ export default function QuizPage() {
               </div>
             </details>
           </div>
+
         </main>
       </div>
     );
@@ -887,7 +1185,7 @@ export default function QuizPage() {
             <div className="bg-white rounded-lg shadow-md p-6 border">
               <h3 className="text-xl font-semibold text-gray-800 mb-4">{currentQuestion.question_text}</h3>
 
-              {/* ── Multiple Choice ── */}
+              {/* Multiple Choice */}
               {currentQuestion.question_type === 'multiple-choice' && (
                 <div className="space-y-3 mb-6">
                   {currentQuestion.options.map((option, index) => {
@@ -911,11 +1209,11 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* ── Checkbox ── */}
+              {/* Checkbox */}
               {currentQuestion.question_type === 'checkbox' && (
                 <div className="space-y-3 mb-6">
                   {currentQuestion.options.map((option, index) => {
-                    const isUserAnswer = currentQuestionState?.answerState.type === 'multiple-choice'
+                    const isUserAnswer = currentQuestionState?.answerState.type === 'checkbox' || currentQuestionState?.answerState.type === 'multiple-choice'
                       ? currentQuestionState.answerState.userAnswer?.includes(option) : false;
                     const isCorrectAnswer = currentQuestion.correct_answer.includes(option);
                     return (
@@ -935,7 +1233,7 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* ── Text ── */}
+              {/* Text */}
               {currentQuestion.question_type === 'text' && (
                 <div className="mb-6">
                   <input
@@ -957,7 +1255,7 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* ── Hotspot ── */}
+              {/* Hotspot */}
               {currentQuestion.question_type === 'hotspot' && (
                 <div className="mb-6">
                   {currentQuestion.image_url ? (
@@ -987,7 +1285,7 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* ── Graph Feature ── */}
+              {/* Graph Feature */}
               {currentQuestion.question_type === 'graph_feature' && (
                 <div className="mb-6">
                   <GraphFeatureQuestionView
@@ -998,7 +1296,7 @@ export default function QuizPage() {
                 </div>
               )}
 
-              {/* ── Submit feedback banner ── */}
+              {/* Submit feedback banner */}
               {currentQuestionState?.isSubmitted && (
                 <div className={`p-4 rounded-lg mb-4 ${currentQuestionState.isCorrect ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
                   {currentQuestionState.isCorrect

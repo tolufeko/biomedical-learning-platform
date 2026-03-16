@@ -1,0 +1,167 @@
+// app/api/quiz-feedback/route.ts
+import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import OpenAI from 'openai';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ── Cooldown guard ────────────────────────────────────────────────────────────
+// Resets on server restart — intentional, this is a soft abuse guard only
+const recentRequests = new Map<string, number>();
+const COOLDOWN_MS = 60_000; // 1 minute between requests per user
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+export interface QuizFeedbackQuestion {
+  questionText: string;
+  questionType: string;
+  correct: boolean;
+  userAnswer: string;
+  correctAnswer: string;
+  timeSpent: number; // seconds
+}
+
+export interface QuizFeedbackPayload {
+  quizTitle: string;
+  score: number; // percentage 0–100
+  questions: QuizFeedbackQuestion[];
+}
+
+// ── Prompt builder ────────────────────────────────────────────────────────────
+function buildPrompt(payload: QuizFeedbackPayload): string {
+  const incorrectQuestions = payload.questions.filter(q => !q.correct);
+  const slowQuestions = payload.questions
+    .filter(q => q.timeSpent > 60)
+    .sort((a, b) => b.timeSpent - a.timeSpent)
+    .slice(0, 3);
+
+  const questionBreakdown = payload.questions
+    .map((q, i) => {
+      const flag = q.timeSpent > 60 ? ` [took ${q.timeSpent}s]` : '';
+      return `Q${i + 1} [${q.questionType}]${flag}: ${q.questionText}
+  Student answered: ${q.userAnswer}
+  Correct answer:   ${q.correctAnswer}
+  Result: ${q.correct ? '✓ Correct' : '✗ Incorrect'}`;
+    })
+    .join('\n\n');
+
+  return `You are an expert, encouraging tutor providing personalised feedback to a student.
+
+Quiz title: "${payload.quizTitle}"
+Final score: ${payload.score}%
+Questions attempted: ${payload.questions.length}
+Incorrect answers: ${incorrectQuestions.length}
+
+--- Question breakdown ---
+${questionBreakdown}
+---
+
+Write feedback with exactly these four sections, using these exact markdown headings:
+
+## Overall Assessment
+2–3 sentences summarising their performance. Be honest but warm.
+
+## What You Did Well
+1–3 specific things they got right — reference actual question content, not generic praise.
+
+## Areas to Work On
+For each incorrect answer, explain the likely misconception and the correct reasoning. Be specific to the actual content — do not give generic study tips here.
+${slowQuestions.length > 0 ? `Also note that they spent a long time on: ${slowQuestions.map(q => `"${q.questionText}"`).join(', ')} — suggest why this might be and how to build confidence with that type of question.` : ''}
+
+## Suggested Next Steps
+2–3 concrete, actionable revision suggestions directly tied to their weak areas.
+
+Keep the total response under 400 words. Use plain language. No bullet points inside sections — write in short paragraphs.`;
+}
+
+// ── Route handler ─────────────────────────────────────────────────────────────
+export async function POST(request: Request) {
+  try {
+    // Auth check
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+
+    const userData = await supabase.auth.getUser();
+    const user = userData.data?.user;
+
+    if (userData.error || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Login required' },
+        { status: 401 }
+      );
+    }
+
+    // Cooldown check
+    const lastCall = recentRequests.get(user.id);
+    if (lastCall && Date.now() - lastCall < COOLDOWN_MS) {
+      const secondsLeft = Math.ceil((COOLDOWN_MS - (Date.now() - lastCall)) / 1000);
+      return NextResponse.json(
+        { error: `Please wait ${secondsLeft}s before requesting feedback again.` },
+        { status: 429 }
+      );
+    }
+
+    // Parse and validate payload
+    const payload: QuizFeedbackPayload = await request.json();
+
+    if (
+      !payload.quizTitle ||
+      typeof payload.score !== 'number' ||
+      !Array.isArray(payload.questions) ||
+      payload.questions.length === 0
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid payload: quizTitle, score, and questions are required.' },
+        { status: 400 }
+      );
+    }
+
+    // Clamp questions to 20 to keep prompt size reasonable
+    if (payload.questions.length > 20) {
+      payload.questions = payload.questions.slice(0, 20);
+    }
+
+    // Record timestamp BEFORE the OpenAI call so even slow responses count
+    recentRequests.set(user.id, Date.now());
+
+    // Stream from OpenAI
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: buildPrompt(payload) }],
+      max_tokens: 600,
+      temperature: 0.7,
+      stream: true,
+    });
+
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const text = chunk.choices[0]?.delta?.content ?? '';
+            if (text) controller.enqueue(encoder.encode(text));
+          }
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  } catch (error: any) {
+    console.error('🐞 Quiz feedback API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate feedback. Please try again.' },
+      { status: 500 }
+    );
+  }
+}
