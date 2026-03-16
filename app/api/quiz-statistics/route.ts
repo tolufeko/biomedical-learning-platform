@@ -184,7 +184,7 @@ export async function GET(request: Request) {
               quiz_id,
               question_id,
               display_order,
-              questions (id, question_text, question_type)
+              questions (id, question_text, question_type, topic)
             )
           `)
           .in('question_assignment_id', assignmentIds);
@@ -253,17 +253,22 @@ export async function GET(request: Request) {
     const averageTime = totalTime / filteredData.length;
 
     const questionStats: Record<string, { total: number; incorrect: number }> = {};
+    const topicStats: Record<string, { total: number; incorrect: number }> = {};
+
     filteredData.forEach(record => {
       const qId = record.question_assignments?.question_id;
+      const topic = record.question_assignments?.questions?.topic || 'Uncategorised';
       if (!qId) return;
-      
-      if (!questionStats[qId]) {
-        questionStats[qId] = { total: 0, incorrect: 0 };
-      }
+
+      // Per-question stats (unchanged)
+      if (!questionStats[qId]) questionStats[qId] = { total: 0, incorrect: 0 };
       questionStats[qId].total++;
-      if (!record.correct) {
-        questionStats[qId].incorrect++;
-      }
+      if (!record.correct) questionStats[qId].incorrect++;
+
+      // Per-topic stats (new)
+      if (!topicStats[topic]) topicStats[topic] = { total: 0, incorrect: 0 };
+      topicStats[topic].total++;
+      if (!record.correct) topicStats[topic].incorrect++;
     });
 
     let highestErrorQuestion = null;
@@ -278,24 +283,34 @@ export async function GET(request: Request) {
           question_text: questionTextMap[questionId] || 'Unknown question',
           error_rate: parseFloat(errorRate.toFixed(1)),
           total_attempts: stats.total,
-          incorrect_attempts: stats.incorrect
+          incorrect_attempts: stats.incorrect,
         };
       }
     }
+
+    const topicBreakdown = Object.entries(topicStats).map(([topic, stats]) => ({
+      topic,
+      total: stats.total,
+      correct: stats.total - stats.incorrect,
+      incorrect: stats.incorrect,
+      error_rate: parseFloat(((stats.incorrect / stats.total) * 100).toFixed(1)),
+    }));
 
     return NextResponse.json({
       average_score: parseFloat(averageScore.toFixed(1)),
       average_time_spent: Math.round(averageTime),
       highest_error_question: highestErrorQuestion,
       total_attempts: filteredData.length,
-      data_available: true
+      data_available: true,
+      topic_breakdown: topicBreakdown,
     });
-  } catch (error: any) {
+    } 
+  catch (error: any) {
     console.error('🐞 Quiz stats API error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to fetch statistics',
-        details: error.message 
+        details: error.message,
       },
       { status: 500 }
     );

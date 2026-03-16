@@ -88,7 +88,9 @@ export async function GET(
           question_text,
           options,
           correct_answer,
-          image_path
+          image_path,
+          topic,
+          creator_id
         )
       `)
       .eq('quiz_id', id)
@@ -366,6 +368,8 @@ export async function PUT(
               options: q.options || null,
               correct_answer: correctAnswer,
               image_path: q.image_path || null,
+              topic: q.topic || null,
+              creator_id: user.id,
             }])
             .select('id')
             .single();

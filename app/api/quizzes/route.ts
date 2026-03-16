@@ -1,64 +1,61 @@
+// app/api/quizzes/route.ts
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
-// Admin client for database operations (Service Role Key)
-const supabaseAdmin = createClient(
+const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function GET() {
   try {
-    // ✅ Fixed: Correct destructuring
-    const { data: quizzes, error: quizzesError } = await supabaseAdmin
+    // 1. Fetch all quizzes first
+    const { data: quizzes, error: quizError } = await supabase
       .from("quiz")
-      .select(`
-        *,
-        profiles (username, email)
-      `)
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (quizzesError) {
-      console.error("Supabase GET error:", quizzesError);
-      return NextResponse.json({ error: quizzesError.message }, { status: 500 });
-    }
+    if (quizError) throw quizError;
+    if (!quizzes) return NextResponse.json([]);
 
-    // For each quiz, fetch its questions via junction table
-    const quizzesWithQuestions = await Promise.all(
-      quizzes.map(async (quiz: any) => {
-        // ✅ Fixed: Correct destructuring
-        const { data: assignments, error: assignError } = await supabaseAdmin
-          .from('question_assignments')
-          .select(`
-            display_order,
-            questions (
-              id,
-              question_type,
-              question_text,
-              options,
-              correct_answer,
-              image_path
-            )
-          `)
-          .eq('quiz_id', quiz.id)
-          .order('display_order', { ascending: true });
+    // 2. Fetch assignments and questions for these quizzes
+    const quizIds = quizzes.map(q => q.id);
+    
+    const { data: assignments, error: assignError } = await supabase
+      .from("question_assignments")
+      .select(`
+        quiz_id,
+        display_order,
+        questions (
+          id,
+          question_type,
+          question_text,
+          options,
+          correct_answer,
+          image_path,
+          topic,
+          creator_id
+        )
+      `)
+      .in("quiz_id", quizIds)
+      .order("display_order", { ascending: true });
 
-        if (assignError) {
-          console.error(`Error fetching questions for quiz ${quiz.id}:`, assignError);
-          return { ...quiz, questions: [] };
-        }
+    if (assignError) throw assignError;
 
-        return {
-          ...quiz,
-          questions: assignments?.map(a => ({
-            ...a.questions,
-            display_order: a.display_order
-          })) || []
-        };
-      })
-    );
+    // 3. Map the questions back to their respective quizzes
+    const quizzesWithQuestions = quizzes.map(quiz => {
+      const relatedAssignments = assignments?.filter(a => a.quiz_id === quiz.id) || [];
+      
+      // Extract the actual question objects and sort by display_order just in case
+      const questions = relatedAssignments
+        .map(a => a.questions)
+        .filter(Boolean); // Remove any nulls if a question was deleted but assignment remains
+
+      return {
+        ...quiz,
+        questions: questions
+      };
+    });
 
     return NextResponse.json(quizzesWithQuestions);
 
@@ -70,167 +67,107 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    // ✅ GET AUTHENTICATED USER FROM COOKIES
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    // ✅ VERIFY USER IS LOGGED IN
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Login required' },
-        { status: 401 }
-      );
-    }
-
-    // ✅ PARSE REQUEST BODY (NO userId!)
     const formData = await request.json();
-    const { title, questions, description } = formData;
+    const { title, questions, description, userId } = formData;
 
-    // ✅ VALIDATE REQUIRED FIELDS
-    if (!title || !questions || !Array.isArray(questions)) {
-      return NextResponse.json(
-        { error: "Title and questions array are required" },
-        { status: 400 }
-      );
+    if (!title || !questions) {
+      return NextResponse.json({ error: "Title and questions are required" }, { status: 400 });
+    }
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 });
     }
 
-    // Create the quiz first (using verified user.id)
-    // ✅ Fixed: Correct destructuring
-    const { data: quizData, error: quizError } = await supabaseAdmin
+    // 1. Create the quiz
+    const { data: quiz, error: quizError } = await supabase
       .from("quiz")
-      .insert([
-        {
-          title,
-          description: description || null,
-          user_id: user.id, // ✅ TRUSTED FROM VERIFIED SESSION
-        }
-      ])
+      .insert([{
+        title,
+        description: description || null,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }])
       .select()
       .single();
 
-    if (quizError) {
-      console.error("Supabase quiz creation error:", quizError);
-      return NextResponse.json({ 
-        error: `Failed to create quiz: ${quizError.message}`
-      }, { status: 500 });
-    }
+    if (quizError) throw quizError;
 
-    const quiz = quizData;
-    console.log(`Quiz created by ${user.id}:`, quiz.id);
+    // 2. Insert questions AND create assignments
+    const insertedQuestions = [];
+    const assignments = [];
 
-    // Process each question: reuse existing or create new
-    const assignmentData = [];
-    
-    for (let [index, q] of questions.entries()) {
-      let questionId: string;
+    for (let index = 0; index < questions.length; index++) {
+      const q = questions[index];
       
-      // Check if question already exists (exact match on text + type)
-      const { data: existingQuestion, error: checkError } = await supabaseAdmin
-        .from('questions')
-        .select('id')
-        .eq('question_text', q.question)
-        .eq('question_type', q.type)
-        .single();
-
-      if (existingQuestion) {
-        // Reuse existing question
-        questionId = existingQuestion.id;
-        console.log(`Reusing existing question: ${questionId}`);
-      } else {
-        // Create new question in master bank
-        let correctAnswer = q.correctAnswer;
-
-        if (q.type === 'text') {
-          correctAnswer = typeof correctAnswer === 'string' 
-            ? correctAnswer 
-            : String(correctAnswer);
-        } else if (
-          q.type === 'multiple-choice' || 
-          q.type === 'checkbox' || 
-          q.type === 'hotspot'
-        ) {
-          if (!Array.isArray(correctAnswer)) {
-            correctAnswer = [correctAnswer];
-          }
-        }
-
-        const { data: newQuestionData, error: qError } = await supabaseAdmin
-          .from('questions')
-          .insert([{
-            question_type: q.type,
-            question_text: q.question,
-            options: q.options || null,
-            correct_answer: correctAnswer,
-            image_path: q.image_path || null,
-          }])
-          .select('id')
-          .single();
-
-        if (qError) throw qError;
-        const newQuestion = newQuestionData;
-        questionId = newQuestion.id;
-        console.log(`Created new question: ${questionId}`);
+      // Prepare correct answer based on type
+      let correctAnswer = q.correctAnswer;
+      if (q.type === 'text') {
+        correctAnswer = typeof correctAnswer === 'string' ? correctAnswer : String(correctAnswer);
+      } else if (!Array.isArray(correctAnswer) && q.type !== 'text') {
+        correctAnswer = [correctAnswer];
       }
 
-      // Create assignment (link quiz ↔ question)
-      assignmentData.push({
+      // A. Insert into 'questions' table (No quiz_id here!)
+      const { data: newQ, error: qError } = await supabase
+        .from("questions")
+        .insert([{
+          question_type: q.type,
+          question_text: q.question,
+          options: q.options,
+          correct_answer: correctAnswer,
+          image_path: q.image_path || null,
+          topic: q.topic || null,
+          creator_id: userId,
+        }])
+        .select('id')
+        .single();
+
+      if (qError) {
+        // Cleanup: Delete quiz if question fails
+        await supabase.from("quiz").delete().eq("id", quiz.id);
+        throw qError;
+      }
+
+      insertedQuestions.push(newQ);
+
+      // B. Link them in 'question_assignments' table
+      assignments.push({
         quiz_id: quiz.id,
-        question_id: questionId,
+        question_id: newQ.id,
         display_order: index,
       });
     }
 
-    // Bulk insert all assignments
-    const { error: assignError } = await supabaseAdmin
-      .from('question_assignments')
-      .insert(assignmentData);
+    // 3. Bulk insert the assignments
+    if (assignments.length > 0) {
+      const { error: assignError } = await supabase
+        .from("question_assignments")
+        .insert(assignments);
 
-    if (assignError) {
-      console.error("Assignment insertion error:", assignError);
-      // Clean up: delete quiz if assignments fail
-      await supabaseAdmin.from('quiz').delete().eq('id', quiz.id);
-      throw assignError;
+      if (assignError) throw assignError;
     }
 
-    console.log("Assignments created:", assignmentData.length);
+    // 4. Return the complete quiz 
+    const finalQuestions = insertedQuestions.map((q, idx) => {
+       return {
+         id: q.id,
+         question_type: questions[idx].type,
+         question_text: questions[idx].question,
+         options: questions[idx].options,
+         correct_answer: questions[idx].correctAnswer, 
+         image_path: questions[idx].image_path,
+         topic: questions[idx].topic,
+         creator_id: userId
+       };
+    });
 
-    // Fetch complete quiz with questions
-    const { data: assignments } = await supabaseAdmin
-      .from('question_assignments')
-      .select(`
-        display_order,
-        questions (
-          id,
-          question_type,
-          question_text,
-          options,
-          correct_answer,
-          image_path
-        )
-      `)
-      .eq('quiz_id', quiz.id)
-      .order('display_order', { ascending: true });
-
-    const quizWithQuestions = {
+    return NextResponse.json({
       ...quiz,
-      questions: assignments?.map(a => ({
-        ...a.questions,
-        display_order: a.display_order
-      })) || []
-    };
-
-    return NextResponse.json(quizWithQuestions);
+      questions: finalQuestions
+    });
 
   } catch (err: any) {
     console.error("API POST error:", err);
-    return NextResponse.json({ 
-      error: `Internal server error: ${err.message}`
-    }, { status: 500 });
+    return NextResponse.json({ error: err.message, details: err }, { status: 500 });
   }
 }

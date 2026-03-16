@@ -12,6 +12,7 @@ interface QuestionInput {
   options: string[];
   correctAnswer: string | string[] | Hotspot[] | GraphFeatureData;
   image_path?: string;
+  topic?: string;
 }
 
 interface Hotspot {
@@ -86,8 +87,8 @@ interface LocalQuestion {
   image_url?: string;
   imageFile?: File | null;
   filePath?: string;
-  // graph_feature stores its config here instead of in correctAnswer
   graphFeatureData?: GraphFeatureData;
+  topic?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -494,6 +495,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBankQuestion, setSelectedBankQuestion] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterTopic, setFilterTopic] = useState<string>('all');
 
   // ── Init from initialData ──────────────────────────────────────────────────
   useEffect(() => {
@@ -510,6 +512,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           correctAnswer: q.correctAnswer || [],
           image_url: q.image_url || '',
           filePath: q.image_path || undefined,
+          topic: q.topic || undefined,
         };
 
         if (q.type === 'graph_feature') {
@@ -754,6 +757,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         : selected.correctAnswer || '',
       image_url: selected.image_url || undefined,
       filePath: selected.image_path || undefined,
+      topic: selected.topic || undefined,
     };
 
     if (selected.type === 'graph_feature') {
@@ -780,9 +784,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         q.question?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         q.options?.some((o: string) => o.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchType = filterType === 'all' || q.type === filterType;
-      return matchSearch && matchType;
+      const matchTopic = filterTopic === 'all' ||
+        (filterTopic === 'uncategorised' ? !q.topic : q.topic === filterTopic);
+      return matchSearch && matchType && matchTopic;
     }),
-    [questionBank, searchTerm, filterType]
+    [questionBank, searchTerm, filterType, filterTopic]
+  );
+
+  const availableTopics = React.useMemo(() =>
+    Array.from(new Set(questionBank.map(q => q.topic).filter(Boolean))) as string[],
+    [questionBank]
   );
 
   // ── Validation ─────────────────────────────────────────────────────────────
@@ -839,8 +850,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           type: q.type,
           question: q.question,
           options: [],
-          // Store the full GraphFeatureData as the correct_answer (JSON-serialisable object)
           correctAnswer: q.graphFeatureData ?? DEFAULT_GRAPH_DATA,
+          topic: q.topic || undefined, 
         };
       }
       return {
@@ -849,6 +860,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         options: q.options,
         correctAnswer: q.correctAnswer as string | string[] | Hotspot[],
         image_path: q.filePath,
+        topic: q.topic || undefined, 
       };
     };
 
@@ -1178,6 +1190,18 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                   />
                 </div>
 
+                {/* Topic */}
+                <div className="form-group">
+                  <label className="block text-sm font-medium mb-2">Topic:</label>
+                  <input
+                    type="text"
+                    value={currentQuestion.topic ?? ''}
+                    onChange={e => updateQuestion(currentQuestion.id, 'topic', e.target.value)}
+                    placeholder="Enter question's topic"
+                    className="w-full border p-2 rounded"
+                  />
+                </div>
+
                 {renderQuestionOptions(currentQuestion)}
                 {renderCorrectAnswerField(currentQuestion)}
               </div>
@@ -1226,6 +1250,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                     />
                   </div>
                   <div className="w-52">
+                    <label className="block text-sm font-medium mb-1">Filter by Topic</label>
+                    <select value={filterTopic} onChange={e => setFilterTopic(e.target.value)} className="w-full border rounded px-3 py-2">
+                      <option value="all">All Topics</option>
+                      {availableTopics.map(topic => (
+                        <option key={topic} value={topic}>{topic}</option>
+                      ))}
+                      <option value="uncategorised">Uncategorised</option>
+                    </select>
+                  </div>
+                  <div className="w-52">
                     <label className="block text-sm font-medium mb-1">Filter by Type</label>
                     <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full border rounded px-3 py-2">
                       <option value="all">All Types</option>
@@ -1250,6 +1284,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                         <tr>
                           <th className="p-3 text-left text-sm font-medium">Select</th>
                           <th className="p-3 text-left text-sm font-medium">Type</th>
+                          <th className="p-3 text-left text-sm font-medium">Topic</th>
                           <th className="p-3 text-left text-sm font-medium">Question</th>
                           <th className="p-3 text-left text-sm font-medium">Options</th>
                           <th className="p-3 text-left text-sm font-medium">Answer / Config</th>
@@ -1277,6 +1312,9 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${typeColors[q.type] ?? 'bg-gray-100 text-gray-800'}`}>
                                   {q.type === 'multiple-choice' ? 'MCQ' : q.type === 'graph_feature' ? 'Graph' : q.type}
                                 </span>
+                              </td>
+                              <td className="p-3 text-sm text-gray-600">
+                                {q.topic || <span className="text-gray-400 italic">Uncategorised</span>}
                               </td>
                               <td className="p-3 max-w-md truncate">{q.question || <span className="text-gray-400">No text</span>}</td>
                               <td className="p-3 text-sm text-gray-600">

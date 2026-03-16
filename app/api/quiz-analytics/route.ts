@@ -84,7 +84,7 @@ export async function GET(request: Request) {
       *,
       question_assignments (
         quiz_id,
-        questions (question_text, question_type)
+        questions (question_text, question_type, topic)
       ),
       profiles (username)
     `);

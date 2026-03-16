@@ -58,6 +58,7 @@ interface BaseQuizQuestion {
   id: string;
   question_type: QuestionType;
   question_text: string;
+  topic?: string; 
   image_path?: string;
   image_url?: string;
   question_assignment_id: string;
@@ -162,7 +163,7 @@ interface StandardFeedback {
   scoreMessage: string;
   scoreEmoji: string;
   slowQuestions: { text: string; seconds: number }[];
-  byType: { type: string; correct: number; total: number }[];
+  byTopic: { topic: string; correct: number; total: number }[];
   mostMissed: { text: string; attempts: number } | null;
 }
 
@@ -194,14 +195,15 @@ function computeStandardFeedback(
     .sort((a, b) => b.seconds - a.seconds)
     .slice(0, 3);
 
-  // Performance by question type
-  const typeMap: Record<string, { correct: number; total: number }> = {};
+  // Performance by topic
+  const topicMap: Record<string, { correct: number; total: number }> = {};
   questions.forEach((q, i) => {
-    if (!typeMap[q.question_type]) typeMap[q.question_type] = { correct: 0, total: 0 };
-    typeMap[q.question_type].total++;
-    if (states[i].isCorrect) typeMap[q.question_type].correct++;
+    const topic = q.topic || 'Uncategorised';
+    if (!topicMap[topic]) topicMap[topic] = { correct: 0, total: 0 };
+    topicMap[topic].total++;
+    if (states[i].isCorrect) topicMap[topic].correct++;
   });
-  const byType = Object.entries(typeMap).map(([type, counts]) => ({ type, ...counts }));
+  const byTopic = Object.entries(topicMap).map(([topic, counts]) => ({ topic, ...counts }));
 
   // Most-missed question (wrong answer with most attempts — here just first wrong)
   const wrongOnes = questions.filter((_, i) => !states[i].isCorrect);
@@ -209,7 +211,7 @@ function computeStandardFeedback(
     ? { text: wrongOnes[0].question_text, attempts: 1 }
     : null;
 
-  return { scoreMessage, scoreEmoji, slowQuestions, byType, mostMissed };
+  return { scoreMessage, scoreEmoji, slowQuestions, byTopic, mostMissed };
 }
 
 // =============== GRAPH HELPERS ===============
@@ -976,16 +978,16 @@ export default function QuizPage() {
           {/* ── Standard feedback panels ── */}
           <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 
-            {/* Performance by question type */}
+            {/* Performance by question topic */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">By Question Type</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">By Topic</h3>
               <div className="space-y-2">
-                {feedback.byType.map(({ type, correct, total }) => {
+                {feedback.byTopic.map(({ topic, correct, total }) => {
                   const pct = Math.round((correct / total) * 100);
                   return (
-                    <div key={type}>
+                    <div key={topic}>
                       <div className="flex justify-between text-sm mb-0.5">
-                        <span className="text-gray-600 capitalize">{type.replace('-', ' ')}</span>
+                        <span className="text-gray-600">{topic}</span>
                         <span className={`font-medium ${pct >= 70 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
                           {correct}/{total}
                         </span>
