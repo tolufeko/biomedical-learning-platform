@@ -1026,65 +1026,8 @@ export default function QuizPage() {
             </div>
           </div>
 
-          {/* ── AI Feedback section ── */}
-          <div className="w-full max-w-2xl mb-6">
-            {!aiFeedbackRequested ? (
-              <button
-                onClick={fetchAiFeedback}
-                className="w-full py-4 rounded-2xl font-semibold text-white text-base
-                  bg-gradient-to-r from-violet-600 to-indigo-600
-                  hover:from-violet-700 hover:to-indigo-700
-                  shadow-md hover:shadow-lg transition-all active:scale-[0.98]
-                  flex items-center justify-center gap-2"
-              >
-                <span className="text-xl">✨</span>
-                Get personalised AI feedback
-              </button>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-sm border border-indigo-100 overflow-hidden">
-                <div className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-violet-50 to-indigo-50 border-b border-indigo-100">
-                  <span className="text-lg">✨</span>
-                  <h3 className="text-sm font-semibold text-indigo-800">AI Feedback</h3>
-                  {aiFeedbackLoading && (
-                    <span className="ml-auto flex items-center gap-1 text-xs text-indigo-400">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </span>
-                  )}
-                </div>
-                <div className="p-5 min-h-[80px]">
-                  {aiFeedbackError ? (
-                    <div className="flex items-start gap-2 text-red-600">
-                      <span>⚠️</span>
-                      <p className="text-sm">{aiFeedbackError}</p>
-                    </div>
-                  ) : aiFeedback ? (
-                    <div className="prose-sm">{renderMarkdown(aiFeedback)}</div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Generating your personalised feedback…</p>
-                  )}
-                  {/* Blinking cursor while streaming */}
-                  {aiFeedbackLoading && aiFeedback && (
-                    <span className="inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Actions ── */}
-          <div className="flex gap-3 flex-wrap justify-center mb-8">
-            <button onClick={restartQuiz} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 shadow-sm">
-              Retry Quiz
-            </button>
-            <Link href="/home" className="px-6 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 shadow-sm">
-              Back to Home
-            </Link>
-          </div>
-
           {/* ── Detailed answer review ── */}
-          <div className="w-full max-w-2xl">
+          <div className="w-full max-w-2xl  mb-6">
             <details className="bg-white rounded-2xl shadow-sm border border-gray-100">
               <summary className="cursor-pointer px-6 py-4 font-semibold text-gray-700 text-base select-none hover:bg-gray-50 rounded-2xl">
                 Review Your Answers
@@ -1146,6 +1089,63 @@ export default function QuizPage() {
                 })}
               </div>
             </details>
+          </div>
+
+          {/* ── AI Feedback section ── */}
+          <div className="w-full max-w-2xl mb-6">
+            {!aiFeedbackRequested ? (
+              <button
+                onClick={fetchAiFeedback}
+                className="w-full py-4 rounded-2xl font-semibold text-white text-base
+                  bg-gradient-to-r from-violet-600 to-indigo-600
+                  hover:from-violet-700 hover:to-indigo-700
+                  shadow-md hover:shadow-lg transition-all active:scale-[0.98]
+                  flex items-center justify-center gap-2"
+              >
+                <span className="text-xl">✨</span>
+                Get personalised AI feedback
+              </button>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-indigo-100 overflow-hidden">
+                <div className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-violet-50 to-indigo-50 border-b border-indigo-100">
+                  <span className="text-lg">✨</span>
+                  <h3 className="text-sm font-semibold text-indigo-800">AI Feedback</h3>
+                  {aiFeedbackLoading && (
+                    <span className="ml-auto flex items-center gap-1 text-xs text-indigo-400">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                  )}
+                </div>
+                <div className="p-5 min-h-[80px]">
+                  {aiFeedbackError ? (
+                    <div className="flex items-start gap-2 text-red-600">
+                      <span>⚠️</span>
+                      <p className="text-sm">{aiFeedbackError}</p>
+                    </div>
+                  ) : aiFeedback ? (
+                    <div className="prose-sm">{renderMarkdown(aiFeedback)}</div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Generating your personalised feedback…</p>
+                  )}
+                  {/* Blinking cursor while streaming */}
+                  {aiFeedbackLoading && aiFeedback && (
+                    <span className="inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Actions ── */}
+          <div className="flex gap-3 flex-wrap justify-center mb-8">
+            <button onClick={restartQuiz} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 shadow-sm">
+              Retry Quiz
+            </button>
+            <Link href="/home" className="px-6 py-3 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 shadow-sm">
+              Back to Home
+            </Link>
           </div>
 
         </main>
