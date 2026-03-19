@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/AuthContext";
+import { ArrowLeft } from 'lucide-react';
 
 interface Quiz {
   id: string;
@@ -65,13 +66,12 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <main className="flex flex-col items-center mt-8 px-6">
-
+        <h2 className="text-3xl font-semibold mb-2 text-gray-800">
+          Biomedical Learning Hub
+        </h2>
         {/* ── Module list view ── */}
         {!selectedModule ? (
           <>
-            <h2 className="text-3xl font-semibold mb-2 text-gray-800">
-              Biomedical Learning Hub
-            </h2>
             <p className="text-gray-600 mb-6 text-center">
               Select a module to begin revising.
             </p>
@@ -124,17 +124,18 @@ export default function HomePage() {
 
         /* ── Quiz list view for selected module ── */
           <>
-            <div className="w-full max-w-6xl mb-6 flex items-center gap-4">
-              <button
-                onClick={() => { setSelectedModule(null); setSearchTerm(""); }}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium"
-              >
-                ← Back to Modules
-              </button>
-              <h2 className="text-2xl font-semibold text-gray-800">{selectedModule}</h2>
-            </div>
+            <div className="w-full max-w-6xl mb-6 flex flex-col items-center relative">
+              {/* Text Stack */}
+              <div className="text-center">
+                <p className="text-gray-600 mb-1">
+                  Select a quiz to begin revising.
+                </p>
+                <p className="text-xs font-medium uppercase tracking-widest text-gray-600 mb-2">
+                  Module name: {selectedModule}
+                </p>
+              </div>
 
-            <div className="w-full max-w-2xl mb-6">
+              {/* Searchbar */}
               <input
                 type="text"
                 placeholder="Search quizzes..."
@@ -142,6 +143,15 @@ export default function HomePage() {
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
+
+              {/* Back Button */}
+              <button
+                onClick={() => { setSelectedModule(null); setSearchTerm(""); }}
+                className="absolute left-0 p-2 text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded-full transition-colors"
+                aria-label="Back to Modules"
+              >
+                <ArrowLeft size={24} />
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
