@@ -68,10 +68,11 @@ const newFeatureRow = (): FeatureAnswer => ({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface QuestionFormProps {
-  onFormSubmit?: (formData: { title: string; questions: QuestionInput[]; description?: string }) => void;
+  onFormSubmit?: (formData: { title: string; questions: QuestionInput[]; description?: string; module: string }) => void;
   initialData?: {
     id?: string;
     title: string;
+    module: string;
     description: string;
     questions: any[];
   };
@@ -466,6 +467,7 @@ function GraphFeatureCreator({
 
 const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, isEditing = false }) => {
   const [formTitle, setFormTitle] = useState('');
+  const [formModule, setFormModule] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [questions, setQuestions] = useState<LocalQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -492,6 +494,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   useEffect(() => {
     if (initialData) {
       setFormTitle(initialData.title);
+      setFormModule(initialData.module);
       setFormDescription(initialData.description || '');
 
       const convertedQuestions: LocalQuestion[] = initialData.questions.map((q, index) => {
@@ -842,6 +845,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) { alert('Please enter a quiz title'); return; }
+    if (!formModule.trim()) { alert('Please enter a quiz module'); return; }
     if (questions.length === 0) { alert('Please add at least one question'); return; }
 
     const errors = questions.map(q => validateQuestion(q)).filter(Boolean);
@@ -878,6 +882,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           title: formTitle,
           description: formDescription,
           questions: questions.map(buildQuestion),
+          module: formModule,
         });
       } else {
         const method = isEditing ? 'PUT' : 'POST';
@@ -887,6 +892,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: formTitle,
+            module: formModule,
             description: formDescription,
             questions: questions.map(buildQuestion),
           }),
@@ -894,7 +900,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         if (response.ok) {
           alert(isEditing ? 'Quiz updated!' : 'Quiz created!');
           if (!isEditing) {
-            setFormTitle(''); setFormDescription(''); setQuestions([]);
+            setFormTitle(''); setFormModule(''); setFormDescription(''); setQuestions([]);
             setCurrentQuestionIndex(0); setImageLoadedStates({});
           }
         } else {
@@ -1205,6 +1211,20 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             value={formTitle}
             onChange={e => setFormTitle(e.target.value)}
             placeholder="Enter quiz title"
+            className="w-full border p-2 rounded"
+            required
+          />
+        </div>
+
+        {/* Module */}
+        <div className="form-group mb-4">
+          <label htmlFor="formModule" className="block text-sm font-medium mb-2">Quiz Module:</label>
+          <input
+            type="text"
+            id="formModule"
+            value={formModule}
+            onChange={e => setFormModule(e.target.value)}
+            placeholder="Enter quiz module"
             className="w-full border p-2 rounded"
             required
           />

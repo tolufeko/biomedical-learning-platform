@@ -68,10 +68,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const formData = await request.json();
-    const { title, questions, description, userId } = formData;
+    const { title, module, questions, description, userId } = formData;
 
-    if (!title || !questions) {
-      return NextResponse.json({ error: "Title and questions are required" }, { status: 400 });
+    if (!title || !module || !questions) {
+      return NextResponse.json({ error: "Title, module and questions are required" }, { status: 400 });
     }
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
@@ -82,6 +82,7 @@ export async function POST(request: Request) {
       .from("quiz")
       .insert([{
         title,
+        module,
         description: description || null,
         user_id: userId,
         created_at: new Date().toISOString(),

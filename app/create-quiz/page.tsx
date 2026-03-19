@@ -29,6 +29,7 @@ interface Quiz {
   created_at: string; 
   updated_at: string; 
   user_id: string;
+  module: string;
 }
 interface HardestQuestion {
   question_id: string;
@@ -103,7 +104,7 @@ export default function TeacherPage() {
   }, [role]);
 
   // =============== Handlers ===============
-  const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string }) => {
+  const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string; module: string}) => {
     try {
       const response = await fetch('/api/quizzes', {
         method: 'POST',
@@ -122,7 +123,7 @@ export default function TeacherPage() {
     }
   };
 
-  const handleFormUpdate = async (formData: { title: string; questions: any[]; description?: string }) => {
+  const handleFormUpdate = async (formData: { title: string; questions: any[]; description?: string; module: string }) => {
     if (!editingForm) return;
     try {
       const response = await fetch(`/api/quizzes/${editingForm.id}`, {
@@ -286,7 +287,6 @@ export default function TeacherPage() {
                               <h3 className="text-xl font-semibold text-gray-900 mb-2">{quiz.title}</h3>
                               {quiz.description && <p className="text-gray-600 mb-3">{quiz.description}</p>}
                               <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                                {/* ✅ FIXED: Changed quiz_questions to questions */}
                                 <span>{quiz.questions?.length || 0} question{quiz.questions?.length !== 1 ? 's' : ''}</span>
                                 <span>•</span>
                                 <span>Created: {new Date(quiz.created_at).toLocaleDateString()}</span>
@@ -346,8 +346,8 @@ export default function TeacherPage() {
                 onFormSubmit={handleFormUpdate}
                 initialData={{
                   title: editingForm.title,
+                  module: editingForm.module,
                   description: editingForm.description || '',
-                  // ✅ FIXED: Changed quiz_questions to questions
                   questions: convertQuizQuestions(editingForm.questions)
                 }}
                 isEditing={true}

@@ -293,11 +293,18 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { title, description, questions } = body;
+    const { title, module, description, questions } = body;
 
     if (!title) {
       return NextResponse.json(
         { error: "Title is required" },
+        { status: 400 }
+      );
+    }
+    
+    if (!module) {
+      return NextResponse.json(
+        { error: "Module is required" },
         { status: 400 }
       );
     }
@@ -307,6 +314,7 @@ export async function PUT(
       .from('quiz')
       .update({
         title,
+        module,
         description: description || null,
       })
       .eq('id', id)
