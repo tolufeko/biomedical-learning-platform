@@ -49,7 +49,7 @@ interface QuizStatistics {
 // =============== MAIN COMPONENT ===============
 export default function TeacherPage() {
   const router = useRouter();
-  const { username, role, user, loading: authLoading, logout } = useAuth();
+  const { role, user } = useAuth();
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [stats, setStats] = useState<QuizStatistics | null>(null);
@@ -65,14 +65,12 @@ export default function TeacherPage() {
   
   // Access check
   useEffect(() => {
-    if (authLoading) return;
-  
     if (!user) {
       router.push("/");
     } else if (role !== 'teacher' && role !== 'admin') {
       router.push("/home");
     }
-  }, [user, role, authLoading, router]);
+  }, [user, role, router]);
 
   // Clear messages
   useEffect(() => {
@@ -204,7 +202,6 @@ export default function TeacherPage() {
     });
   };
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   if (role !== 'teacher' && role !== 'admin') return null;
 
   // =============== RENDER ===============

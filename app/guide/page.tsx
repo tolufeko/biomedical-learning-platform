@@ -7,16 +7,14 @@ import { useEffect } from "react";
 
 export default function HelpPage() {
   const router = useRouter();
-  const { user, role, username, loading: authLoading, logout } = useAuth();
+  const { user, role } = useAuth();
 
   // Access check
   useEffect(() => {
-    if (authLoading) return;
-  
     if (!user) {
       router.push("/");
     }
-  }, [user, role, authLoading, router]);
+  }, [user, role, router]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

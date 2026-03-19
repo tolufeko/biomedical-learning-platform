@@ -1,133 +1,183 @@
-// app/home/page.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
 
 interface Quiz {
   id: string;
   title: string;
   description: string;
-  questions: any[]; 
-  user_id?: string;
+  module: string;
+  questions: any[];
   created_at?: string;
-  updated_at?: string;
 }
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, role, username, loading: authLoading, logout } = useAuth();
+  const { user } = useAuth();
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedModule, setSelectedModule] = useState<string | null>(null);
 
-  // Access check
   useEffect(() => {
-    if (authLoading) return;
-  
-    if (!user) {
-      router.push("/");
-    }
-  }, [user, role, authLoading, router]);
+    if (!user) router.push("/");
+  }, [user, router]);
 
   useEffect(() => {
     const fetchQuizzes = async () => {
       try {
         const response = await fetch('/api/quizzes');
-        
-        // ✅ Better error handling
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
           throw new Error(errorData.error || `HTTP ${response.status}`);
         }
-        
         const data = await response.json();
         setQuizzes(data);
       } catch (error: any) {
-        console.error('Error fetching quizzes:', error);
-        setError(error.message || 'Failed to load subjects. Please try again.');
-      } finally {
-        setLoading(false);
+        setError(error.message || 'Failed to load quizzes.');
       }
     };
     fetchQuizzes();
   }, []);
 
-  const filteredQuizzes = quizzes.filter(quiz =>
-    (quiz.title?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
-    (quiz.description?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
+  // Get unique modules
+  const modules = Array.from(
+    new Set(quizzes.map(q => q.module).filter(Boolean))
+  ).sort();
+
+  // Quizzes in the selected module, filtered by search
+  const quizzesInModule = quizzes.filter(quiz =>
+    quiz.module === selectedModule &&
+    (
+      (quiz.title?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
+      (quiz.description?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
+    )
   );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <main className="flex flex-col items-center justify-center mt-16 px-6">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <div className="text-lg text-gray-600">Loading subjects...</div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const filteredModules = modules.filter(m =>
+    m.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <main className="flex flex-col items-center justify-center mt-8 px-6">
-        <h2 className="text-3xl font-semibold mb-4 text-gray-800">
-          Welcome to your Biomedical Learning Hub
-        </h2>
-        <p className="text-gray-700 mb-4 text-center">
-          Please click on the subject area you wish to revise.
-        </p>
-        <div className="w-full max-w-2xl mb-6">
-          <input
-            type="text"
-            placeholder="Search subjects..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
-          {filteredQuizzes.map((quiz) => (
-            <Card
-              key={quiz.id}
-              className="hover:shadow-lg transition cursor-pointer border-2 border-transparent hover:border-blue-200"
-              onClick={() => router.push(`/quiz/${quiz.id}`)}
-            >
-              <CardHeader>
-                <CardTitle className="text-lg flex justify-between items-start">
-                  <span>{quiz.title}</span>
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {/* ✅ Fixed: Changed quiz_questions to questions */}
-                    {quiz.questions?.length || 0} Qs
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-3">
-                  {quiz.description || "No description available"}
-                </p>
-                <div className="text-xs text-gray-500">
-                  {/* ✅ Fixed: Changed quiz_questions to questions */}
-                  {quiz.questions?.length || 0} question{quiz.questions?.length !== 1 ? 's' : ''}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        {filteredQuizzes.length === 0 && (
-          <div className="text-center text-gray-500 mt-8">
-            <div className="text-lg mb-2">No subjects match your search</div>
-            <p className="text-sm mb-4">Try a different keyword.</p>
-          </div>
+      <main className="flex flex-col items-center mt-8 px-6">
+
+        {/* ── Module list view ── */}
+        {!selectedModule ? (
+          <>
+            <h2 className="text-3xl font-semibold mb-2 text-gray-800">
+              Biomedical Learning Hub
+            </h2>
+            <p className="text-gray-600 mb-6 text-center">
+              Select a module to begin revising.
+            </p>
+
+            <div className="w-full max-w-2xl mb-6">
+              <input
+                type="text"
+                placeholder="Search modules..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
+              {filteredModules.map(module => {
+                const count = quizzes.filter(q => q.module === module).length;
+                return (
+                  <Card
+                    key={module}
+                    className="hover:shadow-lg transition cursor-pointer border-2 border-transparent hover:border-blue-200"
+                    onClick={() => { setSelectedModule(module); setSearchTerm(""); }}
+                  >
+                    <CardHeader>
+                      <CardTitle className="text-lg flex justify-between items-start">
+                        <span>{module}</span>
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                          {count} quiz{count !== 1 ? 'zes' : ''}
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-gray-500">
+                        {count} quiz{count !== 1 ? 'zes' : ''} available
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {filteredModules.length === 0 && (
+              <div className="text-center text-gray-500 mt-8">
+                <p className="text-lg mb-2">No modules found</p>
+                <p className="text-sm">Try a different search term.</p>
+              </div>
+            )}
+          </>
+        ) : (
+
+        /* ── Quiz list view for selected module ── */
+          <>
+            <div className="w-full max-w-6xl mb-6 flex items-center gap-4">
+              <button
+                onClick={() => { setSelectedModule(null); setSearchTerm(""); }}
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium"
+              >
+                ← Back to Modules
+              </button>
+              <h2 className="text-2xl font-semibold text-gray-800">{selectedModule}</h2>
+            </div>
+
+            <div className="w-full max-w-2xl mb-6">
+              <input
+                type="text"
+                placeholder="Search quizzes..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
+              {quizzesInModule.map(quiz => (
+                <Card
+                  key={quiz.id}
+                  className="hover:shadow-lg transition cursor-pointer border-2 border-transparent hover:border-blue-200"
+                  onClick={() => router.push(`/quiz/${quiz.id}`)}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-lg flex justify-between items-start">
+                      <span>{quiz.title}</span>
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        {quiz.questions?.length || 0} Qs
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 mb-3">
+                      {quiz.description || "No description available"}
+                    </p>
+                    <div className="text-xs text-gray-500">
+                      {quiz.questions?.length || 0} question{quiz.questions?.length !== 1 ? 's' : ''}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {quizzesInModule.length === 0 && (
+              <div className="text-center text-gray-500 mt-8">
+                <p className="text-lg mb-2">No quizzes found</p>
+                <p className="text-sm">Try a different search term.</p>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

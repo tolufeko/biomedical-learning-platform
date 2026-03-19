@@ -8,27 +8,19 @@ import { useAuth } from "@/lib/AuthContext";
 
 export default function SignUpPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
-  
+  const { user } = useAuth();
+
+  const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (user) {
       router.push("/home");
     }
-  }, [user, authLoading, router]);
-
-  if (authLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-      </main>
-    );
-  }
+  }, [user, router]);
 
   if (user) return null;
 

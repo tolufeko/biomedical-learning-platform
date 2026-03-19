@@ -14,9 +14,8 @@ interface UserProfile {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, role, username, loading: authLoading } = useAuth();
+  const { user, role} = useAuth();
 
-  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -25,14 +24,12 @@ export default function AdminDashboard() {
 
   // ✅ Use global auth state for access control
   useEffect(() => {
-    if (authLoading) return;
-    
     if (!user) {
       router.push("/");
     } else if (role !== 'admin') {
       router.push("/home");
     }
-  }, [user, role, authLoading, router]);
+  }, [user, role, router]);
 
   // ✅ Filter out current user + apply search
   useEffect(() => {
@@ -93,14 +90,6 @@ export default function AdminDashboard() {
       updateUserRole(userId, newRole);
     }
   };
-
-  if (loading || role === null) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
 
   if (role !== "admin") return null;
 

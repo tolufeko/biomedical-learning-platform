@@ -557,7 +557,7 @@ export default function QuizPage() {
   const [aiFeedbackRequested, setAiFeedbackRequested] = useState(false);
   const [aiFeedbackError, setAiFeedbackError] = useState<string | null>(null);
 
-  const { user, role, username, loading: authLoading } = useAuth();
+  const { user, role } = useAuth();
 
   const questions = quizData?.questions || [];
   const totalQuestions = questions.length;
@@ -649,9 +649,8 @@ export default function QuizPage() {
   };
 
   useEffect(() => {
-    if (authLoading) return;
     if (!user) router.push("/");
-  }, [user, role, authLoading, router]);
+  }, [user, role, router]);
 
   useEffect(() => {
     if (questions.length === 0) return;
