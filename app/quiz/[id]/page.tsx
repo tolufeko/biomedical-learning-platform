@@ -91,13 +91,11 @@ interface QuestionState {
   isCorrect: boolean | null;
   showSolution: boolean;
   startTime: number;
-  // ✅ NEW: record when each question was submitted so we can compute time spent
   endTime: number | null;
 }
 
 // =============== FEEDBACK HELPERS ===============
 
-// Converts a question's correct_answer to a human-readable string for the AI prompt
 function formatCorrectAnswerForFeedback(question: QuizQuestion): string {
   if (question.question_type === 'text') return question.correct_answer;
   if (question.question_type === 'multiple-choice' || question.question_type === 'checkbox')
@@ -112,7 +110,6 @@ function formatCorrectAnswerForFeedback(question: QuizQuestion): string {
   return '—';
 }
 
-// Converts a QuestionState's answer to a human-readable string for the AI prompt
 function formatAnswerForFeedback(question: QuizQuestion, state: QuestionState): string {
   const as = state.answerState;
   if (as.type === 'text') return as.userAnswer || 'No answer';
@@ -125,7 +122,6 @@ function formatAnswerForFeedback(question: QuizQuestion, state: QuestionState): 
   return 'No answer';
 }
 
-// ── Simple markdown renderer (bold, headings, line breaks — no library needed) ─
 function renderMarkdown(text: string): React.ReactElement {
   const lines = text.split('\n');
   const elements: React.ReactElement[] = [];
@@ -141,7 +137,6 @@ function renderMarkdown(text: string): React.ReactElement {
     } else if (line.trim() === '') {
       elements.push(<div key={key++} className="h-1" />);
     } else {
-      // Handle **bold** inline
       const parts = line.split(/(\*\*[^*]+\*\*)/g);
       elements.push(
         <p key={key++} className="text-sm text-gray-700 leading-relaxed">
@@ -158,7 +153,6 @@ function renderMarkdown(text: string): React.ReactElement {
   return <>{elements}</>;
 }
 
-// ── Standard feedback computation ─────────────────────────────────────────────
 interface StandardFeedback {
   scoreMessage: string;
   scoreEmoji: string;
@@ -183,7 +177,6 @@ function computeStandardFeedback(
   const scoreEmoji =
     score >= 90 ? '🏆' : score >= 80 ? '🎉' : score >= 70 ? '👍' : score >= 60 ? '📚' : '💪';
 
-  // Questions that took more than 45 seconds
   const slowQuestions = questions
     .map((q, i) => {
       const spent = states[i].endTime
@@ -195,7 +188,6 @@ function computeStandardFeedback(
     .sort((a, b) => b.seconds - a.seconds)
     .slice(0, 3);
 
-  // Performance by topic
   const topicMap: Record<string, { correct: number; total: number }> = {};
   questions.forEach((q, i) => {
     const topic = q.topic || 'Uncategorised';
@@ -205,7 +197,6 @@ function computeStandardFeedback(
   });
   const byTopic = Object.entries(topicMap).map(([topic, counts]) => ({ topic, ...counts }));
 
-  // Most-missed question (wrong answer with most attempts — here just first wrong)
   const wrongOnes = questions.filter((_, i) => !states[i].isCorrect);
   const mostMissed = wrongOnes.length > 0
     ? { text: wrongOnes[0].question_text, attempts: 1 }
@@ -522,6 +513,33 @@ function GraphFeatureQuestionView({
   );
 }
 
+// =============== QUESTION IMAGE (non-hotspot types) ===============
+// Renders an optional illustrative image above the answer UI.
+// Hotspot questions manage their own image rendering and are excluded.
+function QuestionImage({ url }: { url: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  if (errored) return null;
+
+  return (
+    <div className="mb-5 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 max-w-lg mx-auto">
+      {!loaded && (
+        <div className="flex items-center justify-center h-32 text-sm text-gray-400 animate-pulse">
+          Loading image…
+        </div>
+      )}
+      <img
+        src={url}
+        alt="Question illustration"
+        className={`w-full h-auto object-contain max-h-72 transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0 absolute'}`}
+        onLoad={() => setLoaded(true)}
+        onError={() => setErrored(true)}
+      />
+    </div>
+  );
+}
+
 // =============== MAIN COMPONENT ===============
 
 export default function QuizPage() {
@@ -534,7 +552,6 @@ export default function QuizPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ── AI feedback state ────────────────────────────────────────────────────────
   const [aiFeedback, setAiFeedback] = useState('');
   const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
   const [aiFeedbackRequested, setAiFeedbackRequested] = useState(false);
@@ -580,7 +597,6 @@ export default function QuizPage() {
     } catch (err) { console.error('Error saving analytics:', err); }
   };
 
-  // ── AI feedback fetch ────────────────────────────────────────────────────────
   const fetchAiFeedback = async () => {
     setAiFeedbackLoading(true);
     setAiFeedbackRequested(true);
@@ -632,16 +648,11 @@ export default function QuizPage() {
     }
   };
 
-  // Access check
   useEffect(() => {
     if (authLoading) return;
-  
-    if (!user) {
-      router.push("/");
-    }
+    if (!user) router.push("/");
   }, [user, role, authLoading, router]);
 
-  // Init question states
   useEffect(() => {
     if (questions.length === 0) return;
     const initialStates: QuestionState[] = questions.map(q => {
@@ -654,7 +665,6 @@ export default function QuizPage() {
           answerState = { type: 'multiple-choice', userAnswer: null };
           break;
         case 'checkbox':
-          // ✅ Fixed: was incorrectly typed as 'multiple-choice'
           answerState = { type: 'checkbox', userAnswer: null };
           break;
         case 'hotspot':
@@ -677,7 +687,6 @@ export default function QuizPage() {
     setQuestionStates(initialStates);
   }, [questions.length]);
 
-  // Fetch quiz
   useEffect(() => {
     if (!id) return;
     const fetchQuiz = async () => {
@@ -817,7 +826,6 @@ export default function QuizPage() {
     const timeSpent = now - currentQuestionState.startTime;
     await saveAnalytics(currentQuestion.question_assignment_id, isCorrect, timeSpent);
     const newStates = [...questionStates];
-    // ✅ Record endTime on submit
     newStates[currentQuestionIndex] = {
       ...newStates[currentQuestionIndex],
       isSubmitted: true,
@@ -833,7 +841,6 @@ export default function QuizPage() {
     const q = questions[currentQuestionIndex];
     let freshAnswer: AnswerState;
 
-    // ✅ Fixed: all question types get a fresh answer on retry, not just graph_feature
     switch (q.question_type) {
       case 'text':
         freshAnswer = { type: 'text', userAnswer: null };
@@ -962,7 +969,6 @@ export default function QuizPage() {
       <div className="min-h-screen bg-gray-50">
         <main className="flex flex-col items-center mt-8 px-6 pb-16">
 
-          {/* ── Score hero ── */}
           <div className="w-full max-w-2xl bg-white rounded-2xl shadow-md p-8 text-center mb-6">
             <h2 className="text-3xl font-bold text-gray-800 mb-4">Quiz Complete</h2>
             <div className={`text-7xl font-bold mb-3 ${
@@ -977,10 +983,7 @@ export default function QuizPage() {
             </p>
           </div>
 
-          {/* ── Standard feedback panels ── */}
           <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-
-            {/* Performance by question topic */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">By Topic</h3>
               <div className="space-y-2">
@@ -1006,7 +1009,6 @@ export default function QuizPage() {
               </div>
             </div>
 
-            {/* Timing insights */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Time Insights</h3>
               {feedback.slowQuestions.length === 0 ? (
@@ -1028,7 +1030,6 @@ export default function QuizPage() {
             </div>
           </div>
 
-          {/* ── Detailed answer review ── */}
           <div className="w-full max-w-2xl  mb-6">
             <details className="bg-white rounded-2xl shadow-sm border border-gray-100">
               <summary className="cursor-pointer px-6 py-4 font-semibold text-gray-700 text-base select-none hover:bg-gray-50 rounded-2xl">
@@ -1093,7 +1094,6 @@ export default function QuizPage() {
             </details>
           </div>
 
-          {/* ── AI Feedback section ── */}
           <div className="w-full max-w-2xl mb-6">
             {!aiFeedbackRequested ? (
               <button
@@ -1131,7 +1131,6 @@ export default function QuizPage() {
                   ) : (
                     <p className="text-sm text-gray-400 italic">Generating your personalised feedback…</p>
                   )}
-                  {/* Blinking cursor while streaming */}
                   {aiFeedbackLoading && aiFeedback && (
                     <span className="inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
                   )}
@@ -1140,7 +1139,6 @@ export default function QuizPage() {
             )}
           </div>
 
-          {/* ── Actions ── */}
           <div className="flex gap-3 flex-wrap justify-center mb-8">
             <button onClick={restartQuiz} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 shadow-sm">
               Retry Quiz
@@ -1189,6 +1187,11 @@ export default function QuizPage() {
             {currentQuestion ? (
               <div className="bg-white rounded-lg shadow-md p-6 border">
                 <h3 className="text-xl font-semibold text-gray-800 mb-4">{currentQuestion.question_text}</h3>
+
+                {/* ── Optional question image (all non-hotspot types) ── */}
+                {currentQuestion.question_type !== 'hotspot' && currentQuestion.image_url && (
+                  <QuestionImage url={currentQuestion.image_url} />
+                )}
 
                 {/* Multiple Choice */}
                 {currentQuestion.question_type === 'multiple-choice' && (

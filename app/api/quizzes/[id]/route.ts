@@ -109,7 +109,7 @@ export async function GET(
 
     const questionsWithImages = await Promise.all(
       questions.map(async (q: any) => {
-        if (q.question_type === 'hotspot' && q.image_path) {
+        if (q.image_path) {
           const signedUrlResult = await supabaseAdmin.storage
             .from('quiz-images')
             .createSignedUrl(q.image_path, 3600);

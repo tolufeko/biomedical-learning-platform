@@ -108,7 +108,7 @@ export default function TeacherPage() {
       const response = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData }),
+        body: JSON.stringify({ ...formData, userId: user?.id }),
       });
       const result = await response.json();
       if (response.ok) {
@@ -128,7 +128,7 @@ export default function TeacherPage() {
       const response = await fetch(`/api/quizzes/${editingForm.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData }),
+        body: JSON.stringify({ ...formData, userId: user?.id }),
       });
       const result = await response.json();
       if (response.ok) {

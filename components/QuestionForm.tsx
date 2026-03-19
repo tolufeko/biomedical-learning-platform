@@ -122,19 +122,12 @@ function normaliseGF(raw: any): GraphFeatureData {
 // GRAPH HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Returns { type: 'vertical', xVal } | { type: 'horizontal', yVal } | { type: 'function' }
 function parseEquationType(raw: string): { type: 'vertical'; xVal: number } | { type: 'horizontal'; yVal: number } | { type: 'function'; expr: string } {
   const s = raw.trim().replace(/\s/g, '');
-
-  // x = 4  or  x=-3.5
   const vertMatch = s.match(/^x=(-?[\d.]+)$/);
   if (vertMatch) return { type: 'vertical', xVal: parseFloat(vertMatch[1]) };
-
-  // y = 4  or  y=-3.5  (constant horizontal)
   const horizConst = s.match(/^y=(-?[\d.]+)$/);
   if (horizConst) return { type: 'horizontal', yVal: parseFloat(horizConst[1]) };
-
-  // y = f(x)  — strip leading "y=" if present
   const expr = s.startsWith('y=') ? s.slice(2) : s;
   return { type: 'function', expr };
 }
@@ -154,7 +147,6 @@ function evaluateExpr(expr: string, x: number): number | null {
   }
 }
 
-// Draw a single equation onto an existing canvas context
 function drawEquation(
   ctx: CanvasRenderingContext2D,
   eq: { expr: string; color: string },
@@ -187,7 +179,6 @@ function drawEquation(
     return;
   }
 
-  // function
   const steps = (W - 2 * pad) * 2;
   ctx.beginPath();
   let started = false;
@@ -220,7 +211,6 @@ function GraphPreview({ data }: { data: GraphFeatureData }) {
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, W, H);
 
-    // Grid
     ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
     for (let x = Math.ceil(data.xMin); x <= data.xMax; x++) {
       ctx.beginPath(); ctx.moveTo(toX(x), pad); ctx.lineTo(toX(x), H - pad); ctx.stroke();
@@ -229,7 +219,6 @@ function GraphPreview({ data }: { data: GraphFeatureData }) {
       ctx.beginPath(); ctx.moveTo(pad, toY(y)); ctx.lineTo(W - pad, toY(y)); ctx.stroke();
     }
 
-    // Axes
     ctx.strokeStyle = '#374151'; ctx.lineWidth = 2;
     if (data.yMin <= 0 && data.yMax >= 0) {
       ctx.beginPath(); ctx.moveTo(pad, toY(0)); ctx.lineTo(W - pad, toY(0)); ctx.stroke();
@@ -238,7 +227,6 @@ function GraphPreview({ data }: { data: GraphFeatureData }) {
       ctx.beginPath(); ctx.moveTo(toX(0), pad); ctx.lineTo(toX(0), H - pad); ctx.stroke();
     }
 
-    // Tick labels
     const zy = (data.yMin <= 0 && data.yMax >= 0) ? toY(0) : H - pad;
     const zx = (data.xMin <= 0 && data.xMax >= 0) ? toX(0) : pad;
     ctx.fillStyle = '#9ca3af'; ctx.font = '9px monospace';
@@ -253,7 +241,6 @@ function GraphPreview({ data }: { data: GraphFeatureData }) {
       ctx.fillText(String(y), zx - 5, toY(y) + 3);
     }
 
-    // Custom axis labels
     if (data.xLabel) {
       ctx.fillStyle = '#374151'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(data.xLabel, W / 2, H - 2);
@@ -267,13 +254,11 @@ function GraphPreview({ data }: { data: GraphFeatureData }) {
       ctx.restore();
     }
 
-    // Curves — one per equation entry
     (data.equations ?? []).forEach(eq => {
       if (!eq.expr) return;
       drawEquation(ctx, { expr: eq.expr, color: eq.color }, toX, toY, data.xMin, data.xMax, data.yMin, data.yMax, W, pad);
     });
 
-    // Answer dots
     data.features.forEach(f => {
       if (f.x === '' || f.y === '') return;
       ctx.beginPath(); ctx.arc(toX(Number(f.x)), toY(Number(f.y)), 5, 0, Math.PI * 2);
@@ -318,51 +303,52 @@ function GraphFeatureCreator({
     <div className="space-y-5 mt-3">
       {/* Equation list */}
       <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="block text-sm font-medium">
-              Equations{' '}
-              <span className="text-gray-400 font-normal text-xs">
-                (use <code>x</code> as variable — e.g. <code>x^2 - 4</code>)
-              </span>
-            </label>
-            <button
-              type="button"
-              onClick={() => set({ equations: [...(data.equations ?? []), newEquationEntry((data.equations ?? []).length)] })}
-              className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700"
-            >
-              + Add Equation
-            </button>
-          </div>
-          {(data.equations ?? []).map((eq, idx) => (
-            <div key={eq.id} className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 w-4 shrink-0">{idx + 1}</span>
-              <input
-                type="text"
-                value={eq.expr}
-                onChange={e => set({ equations: data.equations.map(en => en.id === eq.id ? { ...en, expr: e.target.value } : en) })}
-                placeholder="e.g. x^2 - 4"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-              <input
-                type="color"
-                value={eq.color}
-                onChange={e => set({ equations: data.equations.map(en => en.id === eq.id ? { ...en, color: e.target.value } : en) })}
-                className="w-9 h-9 rounded cursor-pointer border border-gray-300 shrink-0"
-                title="Line colour"
-              />
-              {(data.equations ?? []).length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => set({ equations: data.equations.filter(en => en.id !== eq.id) })}
-                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                  title="Remove"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium">
+            Equations{' '}
+            <span className="text-gray-400 font-normal text-xs">
+              (use <code>x</code> as variable — e.g. <code>x^2 - 4</code>)
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={() => set({ equations: [...(data.equations ?? []), newEquationEntry((data.equations ?? []).length)] })}
+            className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700"
+          >
+            + Add Equation
+          </button>
         </div>
+        {(data.equations ?? []).map((eq, idx) => (
+          <div key={eq.id} className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 w-4 shrink-0">{idx + 1}</span>
+            <input
+              type="text"
+              value={eq.expr}
+              onChange={e => set({ equations: data.equations.map(en => en.id === eq.id ? { ...en, expr: e.target.value } : en) })}
+              placeholder="e.g. x^2 - 4"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+            <input
+              type="color"
+              value={eq.color}
+              onChange={e => set({ equations: data.equations.map(en => en.id === eq.id ? { ...en, color: e.target.value } : en) })}
+              className="w-9 h-9 rounded cursor-pointer border border-gray-300 shrink-0"
+              title="Line colour"
+            />
+            {(data.equations ?? []).length > 1 && (
+              <button
+                type="button"
+                onClick={() => set({ equations: data.equations.filter(en => en.id !== eq.id) })}
+                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                title="Remove"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
       {/* Axis range */}
       <div>
         <label className="block text-sm font-medium mb-2">Axis Range</label>
@@ -435,7 +421,6 @@ function GraphFeatureCreator({
 
         {data.features.length > 0 && (
           <div className="space-y-3">
-            {/* Column headers */}
             <div className="grid grid-cols-[80px_80px_32px] gap-2 px-1">
               <span className="text-xs text-gray-500 font-medium text-center">x</span>
               <span className="text-xs text-gray-500 font-medium text-center">y</span>
@@ -486,7 +471,13 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [uploadingImages, setUploadingImages] = useState<{ [key: string]: boolean }>({});
   const [imageLoadedStates, setImageLoadedStates] = useState<{ [key: string]: boolean }>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Per-question file input refs (keyed by question id) ───────────────────
+  // We use a callback ref map so each question has its own hidden <input type="file">
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  // Hotspot questions still use the original single ref (unchanged behaviour)
+  const hotspotFileInputRef = useRef<HTMLInputElement>(null);
 
   // Question Bank Modal State
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
@@ -516,7 +507,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         };
 
         if (q.type === 'graph_feature') {
-          // correctAnswer may be a raw object or a JSON string
           let gfData: GraphFeatureData = DEFAULT_GRAPH_DATA;
           if (typeof q.correctAnswer === 'string') {
             try { gfData = normaliseGF(JSON.parse(q.correctAnswer)); } catch {}
@@ -542,10 +532,10 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
 
   // ── Question types ─────────────────────────────────────────────────────────
   const questionTypes = [
-    { value: 'text',           label: 'Text' },
+    { value: 'text',            label: 'Text' },
     { value: 'multiple-choice', label: 'Multiple Choice' },
-    { value: 'hotspot',        label: 'Hotspot' },
-    { value: 'graph_feature',  label: 'Graph' },
+    { value: 'hotspot',         label: 'Hotspot' },
+    { value: 'graph_feature',   label: 'Graph' },
   ];
 
   // ── Add / remove questions ─────────────────────────────────────────────────
@@ -583,6 +573,10 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         options: newType === 'multiple-choice' ? [''] : [],
         correctAnswer: newType === 'graph_feature' ? DEFAULT_GRAPH_DATA : [],
         graphFeatureData: newType === 'graph_feature' ? DEFAULT_GRAPH_DATA : undefined,
+        // Preserve any uploaded image when switching types (unless switching TO hotspot,
+        // where the image becomes interactive — clear it so the teacher re-uploads intentionally)
+        image_url: newType === 'hotspot' ? undefined : q.image_url,
+        filePath: newType === 'hotspot' ? undefined : q.filePath,
       };
       return updated;
     }));
@@ -632,7 +626,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     ));
   };
 
-  // ── Image upload / hotspot ─────────────────────────────────────────────────
+  // ── Shared image upload (used by ALL question types) ───────────────────────
   const handleImageUpload = async (questionId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -646,7 +640,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       const response = await fetch('/api/upload', { method: 'POST', body: formData });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `Upload failed: ${response.status}`);
-      setQuestions(questions.map(q =>
+      setQuestions(qs => qs.map(q =>
         q.id === questionId ? { ...q, image_url: result.imageUrl, imageFile: null, filePath: result.filePath } : q
       ));
       setImageLoadedStates(prev => ({ ...prev, [questionId]: false }));
@@ -654,7 +648,9 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       alert(`Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploadingImages(prev => ({ ...prev, [questionId]: false }));
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      // Reset the file input for this question
+      if (fileInputRefs.current[questionId]) fileInputRefs.current[questionId]!.value = '';
+      if (hotspotFileInputRef.current) hotspotFileInputRef.current.value = '';
     }
   };
 
@@ -682,6 +678,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const handleImageLoad = (id: string) => setImageLoadedStates(prev => ({ ...prev, [id]: true }));
   const handleImageLoadStart = (id: string) => setImageLoadedStates(prev => ({ ...prev, [id]: false }));
 
+  // ── Hotspot click handler (hotspot type only) ─────────────────────────────
   const handleImageClick = (questionId: string, event: React.MouseEvent<HTMLDivElement>) => {
     const question = questions.find(q => q.id === questionId);
     if (!question?.image_url) return;
@@ -699,12 +696,22 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     handleHotspotAnswerChange(questionId, newHotspots);
   };
 
+  // ── Remove image ──────────────────────────────────────────────────────────
+  // For hotspot: also clears correctAnswer (hotspots depend on the image).
+  // For all other types: only removes the image; correctAnswer is preserved.
   const removeImage = (questionId: string) => {
-    setQuestions(questions.map(q =>
-      q.id === questionId
-        ? { ...q, image_url: undefined, imageFile: null, filePath: undefined, correctAnswer: [] }
-        : q
-    ));
+    const question = questions.find(q => q.id === questionId);
+    setQuestions(qs => qs.map(q => {
+      if (q.id !== questionId) return q;
+      return {
+        ...q,
+        image_url: undefined,
+        imageFile: null,
+        filePath: undefined,
+        // Only reset hotspot answers — other types keep their correctAnswer untouched
+        ...(q.type === 'hotspot' ? { correctAnswer: [] } : {}),
+      };
+    }));
     setImageLoadedStates(prev => ({ ...prev, [questionId]: false }));
   };
 
@@ -851,7 +858,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           question: q.question,
           options: [],
           correctAnswer: q.graphFeatureData ?? DEFAULT_GRAPH_DATA,
-          topic: q.topic || undefined, 
+          image_path: q.filePath,
+          topic: q.topic || undefined,
         };
       }
       return {
@@ -860,7 +868,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         options: q.options,
         correctAnswer: q.correctAnswer as string | string[] | Hotspot[],
         image_path: q.filePath,
-        topic: q.topic || undefined, 
+        topic: q.topic || undefined,
       };
     };
 
@@ -936,6 +944,105 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     );
   };
 
+  // ── Optional image section (text / multiple-choice / graph_feature) ────────
+  // Renders an upload area + preview for non-hotspot question types.
+  const renderOptionalImage = (question: LocalQuestion) => {
+    // Hotspot handles its own image UI — skip here
+    if (question.type === 'hotspot') return null;
+
+    const isUploading = uploadingImages[question.id];
+    const isImageLoaded = imageLoadedStates[question.id] || false;
+
+    return (
+      <div className="mt-4 border-t pt-4">
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Question Image{' '}
+            <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          {question.image_url && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRefs.current[question.id]?.click()}
+                disabled={isUploading}
+                className={`px-3 py-1 rounded text-sm ${
+                  isUploading
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}
+              >
+                {isUploading ? 'Uploading…' : 'Change'}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeImage(question.id)}
+                className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+              >
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Hidden file input scoped to this question */}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          ref={el => { fileInputRefs.current[question.id] = el; }}
+          onChange={e => handleImageUpload(question.id, e)}
+          disabled={isUploading}
+        />
+
+        {!question.image_url ? (
+          /* Upload dropzone */
+          <div
+            className="border-2 border-dashed border-gray-300 rounded-lg p-5 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+            onClick={() => !isUploading && fileInputRefs.current[question.id]?.click()}
+          >
+            {isUploading ? (
+              <div className="flex items-center justify-center gap-2 text-gray-500">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                <span className="text-sm">Uploading…</span>
+              </div>
+            ) : (
+              <>
+                <svg className="mx-auto mb-2 h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm text-gray-500">Click to upload an image</p>
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG, GIF, WEBP — max 5 MB</p>
+              </>
+            )}
+          </div>
+        ) : (
+          /* Image preview */
+          <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-gray-50 max-w-lg">
+            {!isImageLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                <span className="text-sm text-gray-400">Loading image…</span>
+              </div>
+            )}
+            <img
+              src={question.image_url}
+              alt="Question illustration"
+              className="w-full h-auto object-contain max-h-64"
+              onError={() => handleImageError(question.id)}
+              onLoad={() => handleImageLoad(question.id)}
+              onLoadStart={() => handleImageLoadStart(question.id)}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Hotspot question renderer (unchanged) ─────────────────────────────────
   const renderHotspotQuestion = (question: LocalQuestion) => {
     const hotspots = Array.isArray(question.correctAnswer) && isHotspotArray(question.correctAnswer as any[])
       ? (question.correctAnswer as Hotspot[]) : [];
@@ -947,10 +1054,17 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         <label className="block text-sm font-medium mb-2">Image Upload:</label>
         {!question.image_url ? (
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={e => handleImageUpload(question.id, e)} className="hidden" disabled={isUploading} />
+            <input
+              ref={hotspotFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={e => handleImageUpload(question.id, e)}
+              className="hidden"
+              disabled={isUploading}
+            />
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => hotspotFileInputRef.current?.click()}
               disabled={isUploading}
               className={`px-4 py-2 rounded text-white ${isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
             >
@@ -991,7 +1105,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             </div>
             <div className="flex gap-2 mt-2">
               <button type="button" onClick={() => removeImage(question.id)} className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600">Remove Image</button>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className={`px-3 py-1 rounded text-sm ${isUploading ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>Change Image</button>
+              <button type="button" onClick={() => hotspotFileInputRef.current?.click()} disabled={isUploading} className={`px-3 py-1 rounded text-sm ${isUploading ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>Change Image</button>
             </div>
           </div>
         )}
@@ -1204,6 +1318,9 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
 
                 {renderQuestionOptions(currentQuestion)}
                 {renderCorrectAnswerField(currentQuestion)}
+
+                {/* Optional image — shown for all non-hotspot types */}
+                {renderOptionalImage(currentQuestion)}
               </div>
             </div>
           ) : (
