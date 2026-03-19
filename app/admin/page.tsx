@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 
 interface UserProfile {
@@ -15,7 +14,7 @@ interface UserProfile {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { username, role, user, logout } = useAuth();
+  const { user, role, username, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -26,14 +25,14 @@ export default function AdminDashboard() {
 
   // ✅ Use global auth state for access control
   useEffect(() => {
-    if (role === null) return;
-    if (role !== "admin") {
+    if (authLoading) return;
+    
+    if (!user) {
+      router.push("/");
+    } else if (role !== 'admin') {
       router.push("/home");
-      return;
     }
-    fetchUsers();
-    setLoading(false);
-  }, [role, router]);
+  }, [user, role, authLoading, router]);
 
   // ✅ Filter out current user + apply search
   useEffect(() => {

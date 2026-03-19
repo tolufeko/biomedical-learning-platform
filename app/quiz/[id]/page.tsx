@@ -526,7 +526,6 @@ function GraphFeatureQuestionView({
 
 export default function QuizPage() {
   const router = useRouter();
-  const { logout } = useAuth();
   const { id } = useParams();
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -636,7 +635,10 @@ export default function QuizPage() {
   // Access check
   useEffect(() => {
     if (authLoading) return;
-    if (!user) router.push("/");
+  
+    if (!user) {
+      router.push("/");
+    }
   }, [user, role, authLoading, router]);
 
   // Init question states
@@ -1157,203 +1159,205 @@ export default function QuizPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="flex flex-col items-center mt-8 px-6 pb-8">
-        <h2 className="text-3xl font-semibold mb-2 text-gray-800 text-center">{quizData.title}</h2>
-        {quizData.description && <p className="text-gray-600 mb-6 text-center max-w-2xl">{quizData.description}</p>}
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="text-center mb-8 flex flex-col items-center">
+          <h1 className="text-3xl font-semibold text-gray-800 text-center mb-2">{quizData.title}</h1>
 
-        <div className="mb-6 text-lg text-gray-700 font-medium">Question {currentQuestionIndex + 1} of {totalQuestions}</div>
+          <div className="mb-2 text-lg text-gray-700 font-medium">Question {currentQuestionIndex + 1} of {totalQuestions}</div>
+          {currentQuestion.topic && <p className="text-gray-600 mb-2 text-center">{currentQuestion.topic}</p>}
 
-        {totalQuestions > 1 && (
-          <div className="flex justify-center gap-2 mb-6 flex-wrap">
-            {questions.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => goToQuestion(index)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                  index === currentQuestionIndex ? 'bg-blue-600 text-white' :
-                  questionStates[index]?.isSubmitted
-                    ? questionStates[index]?.isCorrect ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {index + 1}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="w-full max-w-4xl mb-8">
-          {currentQuestion ? (
-            <div className="bg-white rounded-lg shadow-md p-6 border">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">{currentQuestion.question_text}</h3>
-
-              {/* Multiple Choice */}
-              {currentQuestion.question_type === 'multiple-choice' && (
-                <div className="space-y-3 mb-6">
-                  {currentQuestion.options.map((option, index) => {
-                    const isUserAnswer = currentQuestionState?.answerState.type === 'multiple-choice'
-                      ? currentQuestionState.answerState.userAnswer?.includes(option) : false;
-                    const isCorrectAnswer = currentQuestion.correct_answer.includes(option);
-                    return (
-                      <label key={index} className={`flex items-center p-4 rounded-lg border transition-colors ${
-                        currentQuestionState?.isSubmitted
-                          ? isUserAnswer ? isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-red-100 border-red-500 text-red-800'
-                          : currentQuestionState?.showSolution && isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-gray-50 border-gray-300'
-                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                      } ${currentQuestionState?.isSubmitted ? 'cursor-default' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={!!isUserAnswer} onChange={() => handleAnswerSelect(option)} disabled={currentQuestionState?.isSubmitted} className="w-5 h-5 text-blue-600 rounded" />
-                        <span className="ml-3 flex-1">{option}</span>
-                        {currentQuestionState?.showSolution && isCorrectAnswer && <span className="ml-auto text-green-600 font-medium">Correct</span>}
-                        {currentQuestionState?.isSubmitted && isUserAnswer && !isCorrectAnswer && <span className="ml-auto text-red-600 font-medium">Incorrect</span>}
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Checkbox */}
-              {currentQuestion.question_type === 'checkbox' && (
-                <div className="space-y-3 mb-6">
-                  {currentQuestion.options.map((option, index) => {
-                    const isUserAnswer = currentQuestionState?.answerState.type === 'checkbox' || currentQuestionState?.answerState.type === 'multiple-choice'
-                      ? currentQuestionState.answerState.userAnswer?.includes(option) : false;
-                    const isCorrectAnswer = currentQuestion.correct_answer.includes(option);
-                    return (
-                      <label key={index} className={`flex items-center p-4 rounded-lg border transition-colors ${
-                        currentQuestionState?.isSubmitted
-                          ? isUserAnswer ? isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-red-100 border-red-500 text-red-800'
-                          : currentQuestionState?.showSolution && isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-gray-50 border-gray-300'
-                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                      } ${currentQuestionState?.isSubmitted ? 'cursor-default' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={!!isUserAnswer} onChange={e => handleCheckboxAnswerSelect(option, e.target.checked)} disabled={currentQuestionState?.isSubmitted} className="w-5 h-5 text-blue-600 rounded" />
-                        <span className="ml-3 flex-1">{option}</span>
-                        {currentQuestionState?.showSolution && isCorrectAnswer && <span className="ml-auto text-green-600 font-medium">Correct</span>}
-                        {currentQuestionState?.isSubmitted && isUserAnswer && !isCorrectAnswer && <span className="ml-auto text-red-600 font-medium">Incorrect</span>}
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Text */}
-              {currentQuestion.question_type === 'text' && (
-                <div className="mb-6">
-                  <input
-                    type="text"
-                    value={currentQuestionState?.answerState.type === 'text' ? currentQuestionState.answerState.userAnswer || '' : ''}
-                    onChange={e => handleTextAnswerChange(e.target.value)}
-                    disabled={currentQuestionState?.isSubmitted}
-                    placeholder="Type your answer here..."
-                    className={`w-full p-4 border rounded-lg focus:outline-none focus:ring-2 ${
-                      currentQuestionState?.isSubmitted
-                        ? currentQuestionState?.isCorrect ? 'bg-green-50 border-green-500 text-green-800'
-                        : currentQuestionState?.showSolution ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'
-                        : 'bg-white border-gray-300 focus:ring-blue-500'
-                    }`}
-                  />
-                  {currentQuestionState?.showSolution && (
-                    <div className="mt-2 text-green-600"><strong>Correct answer:</strong> {currentQuestion.correct_answer}</div>
-                  )}
-                </div>
-              )}
-
-              {/* Hotspot */}
-              {currentQuestion.question_type === 'hotspot' && (
-                <div className="mb-6">
-                  {currentQuestion.image_url ? (
-                    <div className="relative inline-block border rounded-lg bg-gray-100 overflow-hidden cursor-crosshair" onClick={handleHotspotClick}>
-                      <img src={currentQuestion.image_url} alt="Hotspot question" className="max-w-full h-auto" onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png'; }} />
-                      {currentQuestionState?.answerState.type === 'hotspot' &&
-                        Array.isArray(currentQuestionState.answerState.userAnswer) &&
-                        currentQuestionState.answerState.userAnswer.map((spot, idx) =>
-                          isHotspotAnswer(spot) ? (
-                            <div key={idx} className="absolute w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow"
-                              style={{ left: `${spot.x}%`, top: `${spot.y}%`, transform: 'translate(-50%, -50%)' }} />
-                          ) : null
-                        )}
-                      {currentQuestionState?.showSolution &&
-                        currentQuestion.correct_answer.map((spot, idx) => (
-                          <div key={`c-${idx}`} className="absolute w-6 h-6 bg-green-500 rounded-full border-2 border-white shadow"
-                            style={{ left: `${spot.x}%`, top: `${spot.y}%`, transform: 'translate(-50%, -50%)' }} title="Correct" />
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="bg-red-100 text-red-800 p-4 rounded-lg">⚠️ No image provided for hotspot question.</div>
-                  )}
-                  <div className="mt-3 text-sm text-gray-600">
-                    {!currentQuestionState?.isSubmitted ? 'Click the image to add hotspots. Click an existing hotspot to remove it.'
-                      : currentQuestionState.isCorrect ? '✅ Perfect!' : '❌ Not quite.'}
-                  </div>
-                </div>
-              )}
-
-              {/* Graph Feature */}
-              {currentQuestion.question_type === 'graph_feature' && (
-                <div className="mb-6">
-                  <GraphFeatureQuestionView
-                    question={currentQuestion as GraphFeatureQuestion}
-                    questionState={currentQuestionState}
-                    onAnswerChange={handleGraphFeatureAnswerChange}
-                  />
-                </div>
-              )}
-
-              {/* Submit feedback banner */}
-              {currentQuestionState?.isSubmitted && (
-                <div className={`p-4 rounded-lg mb-4 ${currentQuestionState.isCorrect ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
-                  {currentQuestionState.isCorrect
-                    ? <div className="flex items-center gap-2"><span>🎉</span><span className="font-medium">Correct! Well done!</span></div>
-                    : <div className="flex items-center gap-2"><span>❌</span><span className="font-medium">Incorrect. Try again or show solution!</span></div>}
-                </div>
-              )}
+          {totalQuestions > 1 && (
+            <div className="flex justify-center gap-2 mb-6 flex-wrap">
+              {questions.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => goToQuestion(index)}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                    index === currentQuestionIndex ? 'bg-blue-600 text-white' :
+                    questionStates[index]?.isSubmitted
+                      ? questionStates[index]?.isCorrect ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
             </div>
-          ) : (
-            <div className="text-center text-gray-500 py-8 bg-white rounded-lg border">No question available</div>
           )}
-        </div>
 
-        {/* Prev / Next */}
-        {totalQuestions > 1 && (
-          <div className="flex justify-between w-full max-w-4xl gap-4">
-            <button onClick={goToPreviousQuestion} disabled={currentQuestionIndex === 0}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${currentQuestionIndex === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-              ← Previous
-            </button>
-            <button onClick={goToNextQuestion} disabled={isLastQuestion}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${isLastQuestion ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-              Next →
-            </button>
+          <div className="w-full max-w-4xl mb-8">
+            {currentQuestion ? (
+              <div className="bg-white rounded-lg shadow-md p-6 border">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">{currentQuestion.question_text}</h3>
+
+                {/* Multiple Choice */}
+                {currentQuestion.question_type === 'multiple-choice' && (
+                  <div className="space-y-3 mb-6">
+                    {currentQuestion.options.map((option, index) => {
+                      const isUserAnswer = currentQuestionState?.answerState.type === 'multiple-choice'
+                        ? currentQuestionState.answerState.userAnswer?.includes(option) : false;
+                      const isCorrectAnswer = currentQuestion.correct_answer.includes(option);
+                      return (
+                        <label key={index} className={`flex items-center p-4 rounded-lg border transition-colors ${
+                          currentQuestionState?.isSubmitted
+                            ? isUserAnswer ? isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-red-100 border-red-500 text-red-800'
+                            : currentQuestionState?.showSolution && isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-gray-50 border-gray-300'
+                            : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
+                        } ${currentQuestionState?.isSubmitted ? 'cursor-default' : 'cursor-pointer'}`}>
+                          <input type="checkbox" checked={!!isUserAnswer} onChange={() => handleAnswerSelect(option)} disabled={currentQuestionState?.isSubmitted} className="w-5 h-5 text-blue-600 rounded" />
+                          <span className="ml-3 flex-1">{option}</span>
+                          {currentQuestionState?.showSolution && isCorrectAnswer && <span className="ml-auto text-green-600 font-medium">Correct</span>}
+                          {currentQuestionState?.isSubmitted && isUserAnswer && !isCorrectAnswer && <span className="ml-auto text-red-600 font-medium">Incorrect</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Checkbox */}
+                {currentQuestion.question_type === 'checkbox' && (
+                  <div className="space-y-3 mb-6">
+                    {currentQuestion.options.map((option, index) => {
+                      const isUserAnswer = currentQuestionState?.answerState.type === 'checkbox' || currentQuestionState?.answerState.type === 'multiple-choice'
+                        ? currentQuestionState.answerState.userAnswer?.includes(option) : false;
+                      const isCorrectAnswer = currentQuestion.correct_answer.includes(option);
+                      return (
+                        <label key={index} className={`flex items-center p-4 rounded-lg border transition-colors ${
+                          currentQuestionState?.isSubmitted
+                            ? isUserAnswer ? isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-red-100 border-red-500 text-red-800'
+                            : currentQuestionState?.showSolution && isCorrectAnswer ? 'bg-green-100 border-green-500 text-green-800' : 'bg-gray-50 border-gray-300'
+                            : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
+                        } ${currentQuestionState?.isSubmitted ? 'cursor-default' : 'cursor-pointer'}`}>
+                          <input type="checkbox" checked={!!isUserAnswer} onChange={e => handleCheckboxAnswerSelect(option, e.target.checked)} disabled={currentQuestionState?.isSubmitted} className="w-5 h-5 text-blue-600 rounded" />
+                          <span className="ml-3 flex-1">{option}</span>
+                          {currentQuestionState?.showSolution && isCorrectAnswer && <span className="ml-auto text-green-600 font-medium">Correct</span>}
+                          {currentQuestionState?.isSubmitted && isUserAnswer && !isCorrectAnswer && <span className="ml-auto text-red-600 font-medium">Incorrect</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Text */}
+                {currentQuestion.question_type === 'text' && (
+                  <div className="mb-6">
+                    <input
+                      type="text"
+                      value={currentQuestionState?.answerState.type === 'text' ? currentQuestionState.answerState.userAnswer || '' : ''}
+                      onChange={e => handleTextAnswerChange(e.target.value)}
+                      disabled={currentQuestionState?.isSubmitted}
+                      placeholder="Type your answer here..."
+                      className={`w-full p-4 border rounded-lg focus:outline-none focus:ring-2 ${
+                        currentQuestionState?.isSubmitted
+                          ? currentQuestionState?.isCorrect ? 'bg-green-50 border-green-500 text-green-800'
+                          : currentQuestionState?.showSolution ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'
+                          : 'bg-white border-gray-300 focus:ring-blue-500'
+                      }`}
+                    />
+                    {currentQuestionState?.showSolution && (
+                      <div className="mt-2 text-green-600"><strong>Correct answer:</strong> {currentQuestion.correct_answer}</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Hotspot */}
+                {currentQuestion.question_type === 'hotspot' && (
+                  <div className="mb-6">
+                    {currentQuestion.image_url ? (
+                      <div className="relative inline-block border rounded-lg bg-gray-100 overflow-hidden cursor-crosshair" onClick={handleHotspotClick}>
+                        <img src={currentQuestion.image_url} alt="Hotspot question" className="max-w-full h-auto" onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png'; }} />
+                        {currentQuestionState?.answerState.type === 'hotspot' &&
+                          Array.isArray(currentQuestionState.answerState.userAnswer) &&
+                          currentQuestionState.answerState.userAnswer.map((spot, idx) =>
+                            isHotspotAnswer(spot) ? (
+                              <div key={idx} className="absolute w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow"
+                                style={{ left: `${spot.x}%`, top: `${spot.y}%`, transform: 'translate(-50%, -50%)' }} />
+                            ) : null
+                          )}
+                        {currentQuestionState?.showSolution &&
+                          currentQuestion.correct_answer.map((spot, idx) => (
+                            <div key={`c-${idx}`} className="absolute w-6 h-6 bg-green-500 rounded-full border-2 border-white shadow"
+                              style={{ left: `${spot.x}%`, top: `${spot.y}%`, transform: 'translate(-50%, -50%)' }} title="Correct" />
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="bg-red-100 text-red-800 p-4 rounded-lg">⚠️ No image provided for hotspot question.</div>
+                    )}
+                    <div className="mt-3 text-sm text-gray-600">
+                      {!currentQuestionState?.isSubmitted ? 'Click the image to add hotspots. Click an existing hotspot to remove it.'
+                        : currentQuestionState.isCorrect ? '✅ Perfect!' : '❌ Not quite.'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Graph Feature */}
+                {currentQuestion.question_type === 'graph_feature' && (
+                  <div className="mb-6">
+                    <GraphFeatureQuestionView
+                      question={currentQuestion as GraphFeatureQuestion}
+                      questionState={currentQuestionState}
+                      onAnswerChange={handleGraphFeatureAnswerChange}
+                    />
+                  </div>
+                )}
+
+                {/* Submit feedback banner */}
+                {currentQuestionState?.isSubmitted && (
+                  <div className={`p-4 rounded-lg mb-4 ${currentQuestionState.isCorrect ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
+                    {currentQuestionState.isCorrect
+                      ? <div className="flex items-center gap-2"><span>🎉</span><span className="font-medium">Correct! Well done!</span></div>
+                      : <div className="flex items-center gap-2"><span>❌</span><span className="font-medium">Incorrect. Try again or show solution!</span></div>}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 py-8 bg-white rounded-lg border">No question available</div>
+            )}
           </div>
-        )}
 
-        {/* Check / Retry / Solution / Finish */}
-        <div className="flex gap-3 flex-wrap justify-center mt-4">
-          {!currentQuestionState?.isSubmitted ? (
-            <>
-              <button
-                onClick={submitAnswer}
-                disabled={!hasUserAnswer(currentQuestionState)}
-                className={`px-6 py-3 rounded-lg font-medium transition-colors ${hasUserAnswer(currentQuestionState) ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-              >
-                Check Answer
+          {/* Prev / Next */}
+          {totalQuestions > 1 && (
+            <div className="flex justify-between w-full max-w-4xl gap-4">
+              <button onClick={goToPreviousQuestion} disabled={currentQuestionIndex === 0}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${currentQuestionIndex === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                ← Previous
               </button>
-              <button onClick={finishQuiz} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
-                Finish Quiz
+              <button onClick={goToNextQuestion} disabled={isLastQuestion}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${isLastQuestion ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                Next →
               </button>
-            </>
-          ) : (
-            <>
-              {!currentQuestionState.showSolution && (
-                <button onClick={retryQuestion} className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700">Retry</button>
-              )}
-              {!currentQuestionState.isCorrect && !currentQuestionState.showSolution && (
-                <button onClick={showSolutionFn} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Show Solution</button>
-              )}
-              <button onClick={finishQuiz} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Finish Quiz</button>
-            </>
+            </div>
           )}
+
+          {/* Check / Retry / Solution / Finish */}
+          <div className="flex gap-3 flex-wrap justify-center mt-4">
+            {!currentQuestionState?.isSubmitted ? (
+              <>
+                <button
+                  onClick={submitAnswer}
+                  disabled={!hasUserAnswer(currentQuestionState)}
+                  className={`px-6 py-3 rounded-lg font-medium transition-colors ${hasUserAnswer(currentQuestionState) ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                >
+                  Check Answer
+                </button>
+                <button onClick={finishQuiz} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
+                  Finish Quiz
+                </button>
+              </>
+            ) : (
+              <>
+                {!currentQuestionState.showSolution && (
+                  <button onClick={retryQuestion} className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700">Retry</button>
+                )}
+                {!currentQuestionState.isCorrect && !currentQuestionState.showSolution && (
+                  <button onClick={showSolutionFn} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Show Solution</button>
+                )}
+                <button onClick={finishQuiz} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Finish Quiz</button>
+              </>
+            )}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

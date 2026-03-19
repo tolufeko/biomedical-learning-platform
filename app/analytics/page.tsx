@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/AuthContext";
@@ -42,7 +43,8 @@ type ViewMode = 'general' | 'quiz' | 'student';
 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function TeacherPage() {
-  const { role, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const { user, role, loading: authLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<QuizStatistics | null>(null);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -79,6 +81,15 @@ export default function TeacherPage() {
       setAnalyticsLoading(false);
     }
   };
+
+    // Access check
+    useEffect(() => {
+      if (authLoading) return;
+    
+      if (!user) {
+        router.push("/");
+      }
+    }, [user, role, authLoading, router]);
 
   // Reset viewMode if role changes and current mode isn't available
   useEffect(() => {
