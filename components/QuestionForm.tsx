@@ -12,7 +12,8 @@ interface QuestionInput {
   options: string[];
   correctAnswer: string | string[] | Hotspot[] | GraphFeatureData;
   image_path?: string;
-  topic?: string;
+  question_topic?: string;
+  question_feedback?: string;
 }
 
 interface Hotspot {
@@ -89,7 +90,8 @@ interface LocalQuestion {
   imageFile?: File | null;
   filePath?: string;
   graphFeatureData?: GraphFeatureData;
-  topic?: string;
+  question_topic?: string;
+  question_feedback?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -506,7 +508,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           correctAnswer: q.correctAnswer || [],
           image_url: q.image_url || '',
           filePath: q.image_path || undefined,
-          topic: q.topic || undefined,
+          question_topic: q.question_topic || undefined,
+          question_feedback: q.question_feedback || undefined,
         };
 
         if (q.type === 'graph_feature') {
@@ -767,7 +770,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         : selected.correctAnswer || '',
       image_url: selected.image_url || undefined,
       filePath: selected.image_path || undefined,
-      topic: selected.topic || undefined,
+      question_topic: selected.topic || undefined,
+      question_feedback: selected.feedback || undefined,
     };
 
     if (selected.type === 'graph_feature') {
@@ -795,14 +799,14 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         q.options?.some((o: string) => o.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchType = filterType === 'all' || q.type === filterType;
       const matchTopic = filterTopic === 'all' ||
-        (filterTopic === 'uncategorised' ? !q.topic : q.topic === filterTopic);
+        (filterTopic === 'uncategorised' ? !q.question_topic : q.question_topic === filterTopic);
       return matchSearch && matchType && matchTopic;
     }),
     [questionBank, searchTerm, filterType, filterTopic]
   );
 
   const availableTopics = React.useMemo(() =>
-    Array.from(new Set(questionBank.map(q => q.topic).filter(Boolean))) as string[],
+    Array.from(new Set(questionBank.map(q => q.question_topic).filter(Boolean))) as string[],
     [questionBank]
   );
 
@@ -863,7 +867,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           options: [],
           correctAnswer: q.graphFeatureData ?? DEFAULT_GRAPH_DATA,
           image_path: q.filePath,
-          topic: q.topic || undefined,
+          question_topic: q.question_topic || undefined,
+          question_feedback: q.question_feedback || undefined,
         };
       }
       return {
@@ -872,7 +877,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         options: q.options,
         correctAnswer: q.correctAnswer as string | string[] | Hotspot[],
         image_path: q.filePath,
-        topic: q.topic || undefined,
+        question_topic: q.question_topic || undefined,
+        question_feedback: q.question_feedback || undefined,
       };
     };
 
@@ -1329,8 +1335,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                   <label className="block text-sm font-medium mb-2">Topic:</label>
                   <input
                     type="text"
-                    value={currentQuestion.topic ?? ''}
-                    onChange={e => updateQuestion(currentQuestion.id, 'topic', e.target.value)}
+                    value={currentQuestion.question_topic ?? ''}
+                    onChange={e => updateQuestion(currentQuestion.id, 'question_topic', e.target.value)}
                     placeholder="Enter question's topic"
                     className="w-full border p-2 rounded"
                   />
@@ -1338,6 +1344,18 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
 
                 {renderQuestionOptions(currentQuestion)}
                 {renderCorrectAnswerField(currentQuestion)}
+
+                {/* Feedback */}
+                <div className="form-group">
+                  <label className="block text-sm font-medium mb-2">Feedback:</label>
+                  <input
+                    type="text"
+                    value={currentQuestion.question_feedback ?? ''}
+                    onChange={e => updateQuestion(currentQuestion.id, 'question_feedback', e.target.value)}
+                    placeholder="Enter question's feedback"
+                    className="w-full border p-2 rounded"
+                  />
+                </div>
 
                 {/* Optional image — shown for all non-hotspot types */}
                 {renderOptionalImage(currentQuestion)}
@@ -1451,7 +1469,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                                 </span>
                               </td>
                               <td className="p-3 text-sm text-gray-600">
-                                {q.topic || <span className="text-gray-400 italic">Uncategorised</span>}
+                                {q.question_topic || <span className="text-gray-400 italic">Uncategorised</span>}
                               </td>
                               <td className="p-3 max-w-md truncate">{q.question || <span className="text-gray-400">No text</span>}</td>
                               <td className="p-3 text-sm text-gray-600">

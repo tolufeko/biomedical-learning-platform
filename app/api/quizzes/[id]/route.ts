@@ -105,7 +105,8 @@ export async function GET(
           options,
           correct_answer,
           image_path,
-          topic,
+          question_topic,
+          question_feedback,
           creator_id
         )
       `)
@@ -392,7 +393,8 @@ export async function PUT(
               options: q.options || null,
               correct_answer: correctAnswer,
               image_path: q.image_path || null,
-              topic: q.topic || null,
+              topic: q.question_topic || null,
+              feedback: q.question_feedback || null,
               creator_id: user.id,
             }])
             .select('id')

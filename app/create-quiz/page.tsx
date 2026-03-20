@@ -12,14 +12,16 @@ import QuestionForm from "@/components/QuestionForm";
 interface HotspotAnswer { x: number; y: number; }
 type QuestionCorrectAnswer = string | string[] | HotspotAnswer[];
 interface QuizQuestion {
-  id: string; 
-  question_type: string; 
-  question_text: string; 
+  id: string;
+  question_type: string;
+  question_text: string;
   options: string[];
-  correct_answer: QuestionCorrectAnswer; 
+  correct_answer: QuestionCorrectAnswer;
   display_order: number;
-  image_path?: string; 
+  image_path?: string;
   image_url?: string;
+  question_topic?: string;
+  question_feedback?: string;
 }
 interface Quiz {
   id: string; 
@@ -191,13 +193,17 @@ export default function TeacherPage() {
           correctAnswer: q.correct_answer,
           image_url: q.image_url || '',
           image_path: q.image_path || '',
+          question_topic: q.question_topic || undefined,
+          question_feedback: q.question_feedback || undefined,
         };
       }
-      return { 
-        type: q.question_type, 
-        question: q.question_text, 
-        options: q.options || [], 
-        correctAnswer: q.correct_answer 
+      return {
+        type: q.question_type,
+        question: q.question_text,
+        options: q.options || [],
+        correctAnswer: q.correct_answer,
+        question_topic: q.question_topic || undefined,
+        question_feedback: q.question_feedback || undefined,
       };
     });
   };

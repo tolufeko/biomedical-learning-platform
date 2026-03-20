@@ -69,7 +69,8 @@ export async function GET(request: Request) {
         return {
           id: q.id,
           type: q.question_type,
-          topic: q.topic,
+          topic: q.question_topic,
+          feedback: q.question_feedback,
           question: q.question_text,
           options: q.options || [],
           correctAnswer: q.correct_answer || [],

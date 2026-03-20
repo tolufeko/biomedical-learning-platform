@@ -184,7 +184,7 @@ export async function GET(request: Request) {
               quiz_id,
               question_id,
               display_order,
-              questions (id, question_text, question_type, topic)
+              questions (id, question_text, question_type, question_topic, question_feedback)
             )
           `)
           .in('question_assignment_id', assignmentIds);
@@ -209,7 +209,7 @@ export async function GET(request: Request) {
             quiz_id,
             question_id,
             display_order,
-            questions (id, question_text, question_type)
+            questions (id, question_text, question_type, question_topic, question_feedback)
           )
         `);
       

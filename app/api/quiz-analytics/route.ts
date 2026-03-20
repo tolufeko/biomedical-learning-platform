@@ -112,7 +112,7 @@ export async function GET(request: Request) {
       *,
       question_assignments (
         quiz_id,
-        questions (question_text, question_type, topic)
+        questions (question_text, question_type, question_topic, question_feedback)
       ),
       profiles (username)
     `).eq('user_id', targetUserId);

@@ -54,7 +54,8 @@ export async function GET() {
           options,
           correct_answer,
           image_path,
-          topic,
+          question_topic,
+          question_feedback,
           creator_id
         )
       `)
@@ -133,8 +134,9 @@ export async function POST(request: Request) {
           options: q.options,
           correct_answer: correctAnswer,
           image_path: q.image_path || null,
-          topic: q.topic || null,
-          creator_id: user.id, // ✅ taken from session
+          question_topic: q.question_topic || null,
+          question_feedback: q.question_feedback || null,
+          creator_id: user.id,
         }])
         .select('id')
         .single();
@@ -162,8 +164,9 @@ export async function POST(request: Request) {
       options: questions[idx].options,
       correct_answer: questions[idx].correctAnswer,
       image_path: questions[idx].image_path,
-      topic: questions[idx].topic,
-      creator_id: user.id, // ✅ taken from session
+      question_topic: questions[idx].question_topic,
+      question_feedback: questions[idx].question_feedback,
+      creator_id: user.id,
     }));
 
     return NextResponse.json({ ...quiz, questions: finalQuestions });
