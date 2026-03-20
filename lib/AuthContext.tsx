@@ -1,8 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/lib/supabaseClient"; // ✅ Use absolute path
-import { getGuestUserCookie, clearGuestUserCookie } from "@/lib/cookieHelpers"; // ✅ Absolute path
+import { supabase } from "@/lib/supabaseClient";
 
 interface AuthContextType {
   user: any | null;
@@ -27,6 +26,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const clearAuthState = () => {
+    setUser(null);
+    setRole(null);
+    setUsername(null);
+    setLoading(false);
+  };
 
   const handleAuthSession = async (session: any) => {
     setLoading(true);
@@ -59,21 +65,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchUser = async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (session?.user) {
       await handleAuthSession(session);
     } else {
-      const guestUser = getGuestUserCookie();
-      if (guestUser) {
-        setUser(guestUser);
-        setRole(guestUser.role);
-        setUsername(null);
-      } else {
-        setUser(null);
-        setRole(null);
-        setUsername(null);
-      }
-      setLoading(false);
+      clearAuthState();
     }
   };
 
@@ -83,10 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.warn("Supabase signOut failed:", error);
     }
-    clearGuestUserCookie();
-    setUser(null);
-    setRole(null);
-    setUsername(null);
+    clearAuthState();
   };
 
   useEffect(() => {
@@ -97,37 +90,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (session?.user) {
           handleAuthSession(session);
         } else {
-          const guestUser = getGuestUserCookie();
-          if (guestUser) {
-            setUser(guestUser);
-            setRole(guestUser.role);
-            setUsername(null);
-          } else {
-            setUser(null);
-            setRole(null);
-            setUsername(null);
-          }
-          setLoading(false);
+          clearAuthState();
         }
       }
     );
 
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        role,
-        username,
-        loading,
-        refreshUser: fetchUser,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, role, username, loading, refreshUser: fetchUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
