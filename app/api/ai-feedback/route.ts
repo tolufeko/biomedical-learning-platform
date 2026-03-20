@@ -18,12 +18,12 @@ export interface QuizFeedbackQuestion {
   correct: boolean;
   userAnswer: string;
   correctAnswer: string;
-  timeSpent: number; // seconds
+  timeSpent: number;
 }
 
 export interface QuizFeedbackPayload {
   quizTitle: string;
-  score: number; // percentage 0–100
+  score: number;
   questions: QuizFeedbackQuestion[];
 }
 

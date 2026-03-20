@@ -58,6 +58,7 @@ interface BaseQuizQuestion {
   id: string;
   question_type: QuestionType;
   question_text: string;
+  question_feedback: string;
   topic?: string; 
   image_path?: string;
   image_url?: string;
@@ -90,6 +91,7 @@ interface QuestionState {
   isSubmitted: boolean;
   isCorrect: boolean | null;
   showSolution: boolean;
+  showFeedback: boolean;
   startTime: number;
   endTime: number | null;
 }
@@ -620,7 +622,7 @@ export default function QuizPage() {
         })),
       };
 
-      const response = await fetch('/api/quiz-feedback', {
+      const response = await fetch('/api/ai-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -681,7 +683,7 @@ export default function QuizPage() {
         default:
           answerState = { type: 'text', userAnswer: null };
       }
-      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, startTime: Date.now(), endTime: null };
+      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, showFeedback: false, startTime: Date.now(), endTime: null };
     });
     setQuestionStates(initialStates);
   }, [questions.length]);
@@ -869,6 +871,7 @@ export default function QuizPage() {
       isSubmitted: false,
       isCorrect: null,
       showSolution: false,
+      showFeedback: false,
       startTime: Date.now(),
       endTime: null,
     };
@@ -878,6 +881,12 @@ export default function QuizPage() {
   const showSolutionFn = () => {
     const newStates = [...questionStates];
     newStates[currentQuestionIndex] = { ...newStates[currentQuestionIndex], showSolution: true };
+    setQuestionStates(newStates);
+  };
+
+  const showFeedback = () => {
+    const newStates = [...questionStates];
+    newStates[currentQuestionIndex] = { ...newStates[currentQuestionIndex], showFeedback: true };
     setQuestionStates(newStates);
   };
 
@@ -928,7 +937,7 @@ export default function QuizPage() {
         const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
         answerState = { type: 'graph_feature', userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [] };
       }
-      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, startTime: Date.now(), endTime: null };
+      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, showFeedback: false, startTime: Date.now(), endTime: null };
     }));
     setCurrentQuestionIndex(0);
     setShowResults(false);
@@ -1311,6 +1320,18 @@ export default function QuizPage() {
                       : <div className="flex items-center gap-2"><span>❌</span><span className="font-medium">Incorrect. Try again or show solution!</span></div>}
                   </div>
                 )}
+
+                {currentQuestionState?.isSubmitted && currentQuestionState.showFeedback && currentQuestion?.question_feedback && (
+                  <div className="p-4 rounded-lg mb-4 bg-blue-50 border border-blue-200 text-blue-800">
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">💡</span>
+                      <div>
+                        <p className="font-medium text-sm mb-1">Feedback</p>
+                        <p className="text-sm">{currentQuestion.question_feedback}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center text-gray-500 py-8 bg-white rounded-lg border">No question available</div>
@@ -1348,11 +1369,16 @@ export default function QuizPage() {
               </>
             ) : (
               <>
-                {!currentQuestionState.showSolution && (
+                {!currentQuestionState.isCorrect && !currentQuestionState.showSolution && (
                   <button onClick={retryQuestion} className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700">Retry</button>
                 )}
+                {currentQuestion?.question_feedback && !currentQuestionState.showFeedback && (
+                  <button onClick={showFeedback} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
+                    Show Feedback
+                  </button>
+                )}
                 {!currentQuestionState.isCorrect && !currentQuestionState.showSolution && (
-                  <button onClick={showSolutionFn} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Show Solution</button>
+                  <button onClick={showSolutionFn} className="px-6 py-3 bg-yellow-600 text-white rounded-lg font-medium hover:bg-yellow-700">Show Solution</button>
                 )}
                 <button onClick={finishQuiz} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Finish Quiz</button>
               </>
