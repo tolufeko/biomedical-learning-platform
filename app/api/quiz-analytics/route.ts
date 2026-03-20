@@ -76,9 +76,37 @@ export async function POST(request: Request) {
 // ✅ GET HANDLER (for admin/debug use - remains unchanged)
 export async function GET(request: Request) {
   try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+
+    const userData = await supabase.auth.getUser();
+    const user = userData.data?.user;
+
+    if (userData.error || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Login required' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user_id');
     const questionAssignmentId = searchParams.get('question_assignment_id');
+
+    // teachers can query any user, everyone else is scoped to their own session
+    const teacherCheck = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const isTeacher = ['admin', 'teacher'].includes(teacherCheck.data?.role ?? '');
+
+    const requestedUserId = searchParams.get('user_id');
+    const targetUserId = isTeacher && requestedUserId ? requestedUserId : user.id;
 
     let query = supabaseAdmin.from('analytics').select(`
       *,
@@ -87,11 +115,7 @@ export async function GET(request: Request) {
         questions (question_text, question_type, topic)
       ),
       profiles (username)
-    `);
-
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
+    `).eq('user_id', targetUserId);
 
     if (questionAssignmentId) {
       query = query.eq('question_assignment_id', questionAssignmentId);

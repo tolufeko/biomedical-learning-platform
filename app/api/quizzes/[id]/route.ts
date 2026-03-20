@@ -60,6 +60,22 @@ export async function GET(
       return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
+    // ✅ ADDED - was not in original
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    );
+    const userData = await supabase.auth.getUser();
+    const user = userData.data?.user;
+    if (userData.error || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Login required' },
+        { status: 401 }
+      );
+    }
+
     const quizResult = await supabaseAdmin
       .from("quiz")
       .select(`

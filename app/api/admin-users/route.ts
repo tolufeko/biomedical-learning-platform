@@ -103,11 +103,11 @@ export async function PUT(request: Request) {
       );
     }
 
-    const { userId, role } = await request.json();
+    const { role } = await request.json();
 
-    if (!userId || !role) {
+    if (!role) {
       return NextResponse.json(
-        { error: 'userId and role are required' },
+        { error: 'role is required' },
         { status: 400 }
       );
     }
@@ -120,19 +120,11 @@ export async function PUT(request: Request) {
       );
     }
 
-    // ✅ PREVENT SELF-DEMOTION (admin cannot demote themselves)
-    if (userId === currentUser.id && role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Cannot demote yourself from admin role' },
-        { status: 400 }
-      );
-    }
-
     // ✅ UPDATE USER ROLE
     const updateResult = await supabaseAdmin
       .from('profiles')
       .update({ role })
-      .eq('id', userId);
+      .eq('id', currentUser.id);
 
     if (updateResult.error) throw updateResult.error;
     
