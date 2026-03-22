@@ -1,3 +1,4 @@
+// components/QuestionForm.tsx
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -506,7 +507,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           question: q.question,
           options: q.options || [],
           correctAnswer: q.correctAnswer || [],
-          image_url: q.image_url || '',
+          image_url: q.image_url || undefined,
           filePath: q.image_path || undefined,
           question_topic: q.question_topic || undefined,
           question_feedback: q.question_feedback || undefined,
@@ -530,7 +531,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
 
       const initialImageStates: { [key: string]: boolean } = {};
       initialData.questions.forEach((q, index) => {
-        initialImageStates[`question-${index}`] = !!q.image_url;
+        initialImageStates[`question-${index}`] = false;
       });
       setImageLoadedStates(initialImageStates);
     }
@@ -760,6 +761,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     const selected = questionBank.find(q => q.id === selectedBankQuestion);
     if (!selected) return;
 
+    console.log('Bank question fields:', JSON.stringify(selected, null, 2));
+  
     const newQ: LocalQuestion = {
       id: Date.now().toString(),
       type: selected.type,
@@ -773,7 +776,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       question_topic: selected.topic || undefined,
       question_feedback: selected.feedback || undefined,
     };
-
+  
     if (selected.type === 'graph_feature') {
       let gf: GraphFeatureData = DEFAULT_GRAPH_DATA;
       if (typeof selected.correctAnswer === 'string') {
@@ -784,9 +787,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       newQ.graphFeatureData = gf;
       newQ.correctAnswer = gf;
     }
-
-    setQuestions([...questions, newQ]);
-    setCurrentQuestionIndex(questions.length);
+  
+    const newIndex = questions.length;
+  
+    setQuestions(prev => [...prev, newQ]);
+  
+    if (newQ.image_url) {
+      setImageLoadedStates(prev => ({ ...prev, [newQ.id]: false }));
+    }
+  
+    setCurrentQuestionIndex(newIndex);
     setIsBankModalOpen(false);
     setSelectedBankQuestion(null);
     setSearchTerm('');
@@ -799,14 +809,14 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         q.options?.some((o: string) => o.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchType = filterType === 'all' || q.type === filterType;
       const matchTopic = filterTopic === 'all' ||
-        (filterTopic === 'uncategorised' ? !q.question_topic : q.question_topic === filterTopic);
+        (filterTopic === 'uncategorised' ? !q.topic : q.topic === filterTopic);
       return matchSearch && matchType && matchTopic;
     }),
     [questionBank, searchTerm, filterType, filterTopic]
   );
 
   const availableTopics = React.useMemo(() =>
-    Array.from(new Set(questionBank.map(q => q.question_topic).filter(Boolean))) as string[],
+    Array.from(new Set(questionBank.map(q => q.topic).filter(Boolean))) as string[],
     [questionBank]
   );
 
@@ -1442,7 +1452,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                           <th className="p-3 text-left text-sm font-medium">Topic</th>
                           <th className="p-3 text-left text-sm font-medium">Question</th>
                           <th className="p-3 text-left text-sm font-medium">Options</th>
-                          <th className="p-3 text-left text-sm font-medium">Answer / Config</th>
+                          <th className="p-3 text-left text-sm font-medium">Feedback</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1469,22 +1479,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                                 </span>
                               </td>
                               <td className="p-3 text-sm text-gray-600">
-                                {q.question_topic || <span className="text-gray-400 italic">Uncategorised</span>}
+                                {q.topic || <span className="text-gray-400 italic">Uncategorised</span>}
                               </td>
                               <td className="p-3 max-w-md truncate">{q.question || <span className="text-gray-400">No text</span>}</td>
                               <td className="p-3 text-sm text-gray-600">
                                 {q.options?.length > 0 ? `${q.options.length} option${q.options.length !== 1 ? 's' : ''}` : '—'}
                               </td>
                               <td className="p-3 text-sm text-gray-600 truncate max-w-xs">
-                                {q.type === 'graph_feature'
-                                  ? 'Graph config'
-                                  : Array.isArray(q.correctAnswer)
-                                    ? q.correctAnswer.length > 0
-                                      ? (q.correctAnswer as any[]).join(', ').substring(0, 30) + '...'
-                                      : '—'
-                                    : typeof q.correctAnswer === 'string'
-                                      ? q.correctAnswer.substring(0, 30) + '...'
-                                      : '—'}
+                                {q.feedback
+                                  ? q.feedback.substring(0, 40) + (q.feedback.length > 40 ? '...' : '')
+                                  : <span className="text-gray-400 italic">No feedback</span>}
                               </td>
                             </tr>
                           );

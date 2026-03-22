@@ -202,6 +202,8 @@ export default function TeacherPage() {
         question: q.question_text,
         options: q.options || [],
         correctAnswer: q.correct_answer,
+        image_url: q.image_url || undefined, 
+        image_path: q.image_path || undefined, 
         question_topic: q.question_topic || undefined,
         question_feedback: q.question_feedback || undefined,
       };

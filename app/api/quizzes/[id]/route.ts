@@ -1,3 +1,4 @@
+// app/api/quizzes/[id]/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/auth-helpers-nextjs';
@@ -393,8 +394,8 @@ export async function PUT(
               options: q.options || null,
               correct_answer: correctAnswer,
               image_path: q.image_path || null,
-              topic: q.question_topic || null,
-              feedback: q.question_feedback || null,
+              question_topic: q.question_topic || null,
+              question_feedback: q.question_feedback || null,
               creator_id: user.id,
             }])
             .select('id')
@@ -423,21 +424,23 @@ export async function PUT(
 
     // Fetch updated quiz with questions (include assignment ID)
     const assignmentsResult = await supabaseAdmin
-      .from('question_assignments')
-      .select(`
+    .from('question_assignments')
+    .select(`
+      id,
+      display_order,
+      questions (
         id,
-        display_order,
-        questions (
-          id,
-          question_type,
-          question_text,
-          options,
-          correct_answer,
-          image_path
-        )
-      `)
-      .eq('quiz_id', id)
-      .order('display_order', { ascending: true });
+        question_type,
+        question_text,
+        options,
+        correct_answer,
+        image_path,
+        question_topic,
+        question_feedback
+      )
+    `)
+    .eq('quiz_id', id)
+    .order('display_order', { ascending: true });
 
     if (assignmentsResult.error) throw assignmentsResult.error;
 
