@@ -1,37 +1,71 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
+import type { User } from '@supabase/supabase-js';
 
-// ✅ INLINED USER MENU COMPONENT
-function UserMenu({ user, profile }: { user: any; profile: any }) {
+type UserRole = 'student' | 'teacher' | 'admin'| 'guest';
+
+interface Profile {
+  username: string | null;
+  role: UserRole | null;
+}
+
+// ─── Nav link config ──────────────────────────────────────────────────────────
+
+const ALL_LINKS = {
+  home:        { href: '/home',        label: 'Home'        },
+  admin:       { href: '/admin',       label: 'Admin'       },
+  createQuiz:  { href: '/create-quiz', label: 'Create Quiz' },
+  analytics:   { href: '/analytics',   label: 'Analytics'   },
+  guide:       { href: '/guide',       label: 'Guide'       },
+} as const;
+
+type LinkKey = keyof typeof ALL_LINKS;
+
+// Links available per role (current page is filtered out dynamically below)
+const ROLE_LINKS: Record<UserRole, LinkKey[]> = {
+  admin:   ['home', 'admin', 'createQuiz', 'analytics', 'guide'],
+  teacher: ['home', 'createQuiz', 'analytics', 'guide'],
+  student: ['home', 'analytics', 'guide'],
+  guest:   ['home', 'guide'],
+};
+
+function getNavLinks(role: UserRole | null, pathname: string) {
+  const keys = ROLE_LINKS[role ?? 'student'];
+  return keys
+    .map((k) => ALL_LINKS[k])
+    // ✅ Filter the current page instead of 60-line switch blocks
+    .filter((link) => !pathname.includes(link.href));
+}
+
+// ─── UserMenu ─────────────────────────────────────────────────────────────────
+
+function UserMenu({ user, profile, onSignOut }: {
+  user: User;           // ✅ Typed properly
+  profile: Profile | null;
+  onSignOut: () => Promise<void>;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.user-menu')) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSignOut = async () => {
-    const { supabase } = await import('@/lib/supabaseClient');
-    await supabase.auth.signOut();
-    setIsOpen(false);
-    window.location.href = '/';
+  // ✅ Scoped to the .user-menu element — no global mousedown leak
+  const handleClickOutside = (e: MouseEvent) => {
+    if (!(e.target as HTMLElement).closest('.user-menu')) setIsOpen(false);
   };
+
+  // Attach/detach only while open
+  useState(() => {
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    else         document.removeEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  });
 
   return (
     <div className="relative user-menu">
-      {/* ✅ TEXT TRIGGER: "Profile" (styled like nav links) */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen((o) => !o)}
         className="block text-gray-700 hover:text-blue-600 font-medium py-1.5"
         aria-expanded={isOpen}
         aria-haspopup="true"
@@ -39,15 +73,15 @@ function UserMenu({ user, profile }: { user: any; profile: any }) {
         Profile
       </button>
 
-      {/* ✅ DROPDOWN APPEARS ON CLICK */}
       {isOpen && (
         <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-          {/* User info header */}
           <div className="px-4 py-2 border-b border-gray-100">
             <p className="font-semibold text-gray-900 truncate">
-              {profile?.username || user.email}
+              {profile?.username ?? user.email}
             </p>
-            <p className="text-sm text-gray-500">{profile?.role || 'User'}</p>
+            <p className="text-sm text-gray-500 capitalize">
+              {profile?.role ?? 'temp'}
+            </p>
           </div>
 
           <Link
@@ -58,9 +92,8 @@ function UserMenu({ user, profile }: { user: any; profile: any }) {
             Change Password
           </Link>
 
-          {/* Sign out button */}
           <button
-            onClick={handleSignOut}
+            onClick={async () => { setIsOpen(false); await onSignOut(); }}
             className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
           >
             Sign Out
@@ -71,31 +104,21 @@ function UserMenu({ user, profile }: { user: any; profile: any }) {
   );
 }
 
-// ✅ INLINED MOBILE MENU COMPONENT
-function MobileMenu({
-  user,
-  profile,
-  navLinks,
-  onClose,
-}: {
-  user: any;
-  profile: any;
+// ─── MobileMenu ───────────────────────────────────────────────────────────────
+
+function MobileMenu({ user, profile, navLinks, onClose, onSignOut }: {
+  user: User;           // ✅ Typed properly
+  profile: Profile | null;
   navLinks: { href: string; label: string }[];
   onClose: () => void;
+  onSignOut: () => Promise<void>;
 }) {
-  const handleSignOut = async () => {
-    const { supabase } = await import('@/lib/supabaseClient');
-    await supabase.auth.signOut();
-    onClose();
-    window.location.href = '/';
-  };
-
   return (
     <div className="md:hidden bg-white border-t border-gray-200">
       <div className="px-4 py-4 space-y-3">
         <div className="pb-3 border-b border-gray-200">
           <p className="font-semibold text-gray-900">
-            Hi, {profile?.username || user.email?.split('@')[0]}
+            Hi, {profile?.username ?? user.email?.split('@')[0]}
           </p>
         </div>
         {navLinks.map((link) => (
@@ -109,7 +132,7 @@ function MobileMenu({
           </Link>
         ))}
         <button
-          onClick={handleSignOut}
+          onClick={async () => { onClose(); await onSignOut(); }}
           className="w-full text-left text-red-600 hover:text-red-700 font-medium py-2"
         >
           Sign Out
@@ -119,190 +142,44 @@ function MobileMenu({
   );
 }
 
-// ✅ MAIN NAVBAR COMPONENT
+// ─── Navbar ───────────────────────────────────────────────────────────────────
+
 export default function Navbar() {
   const pathname = usePathname();
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const { user, role, username, loading, logout } = useAuth(); // ✅ Single source of truth
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const authStateChange = supabase.auth.onAuthStateChange((_event, session) => {
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      setIsLoading(false);
+  const profile: Profile | null = user ? { username, role } : null;
 
-      if (currentUser) {
-        supabase
-          .from('profiles')
-          .select('username, role')
-          .eq('id', currentUser.id)
-          .single()
-          .then(({ data, error }) => {
-            if (error) {
-              console.warn('Profile fetch failed (using fallback):', error.message);
-              setProfile({
-                username: currentUser.email?.split('@')[0] || 'User',
-                role: 'student'
-              });
-            } else {
-              setProfile(data);
-            }
-          });
-      } else {
-        setProfile(null);
-      }
-    });
+  // ✅ Replaces the 60-line switch/if-else chain
+  const navLinks = useMemo(
+    () => getNavLinks(role, pathname ?? ''),
+    [role, pathname]
+  );
 
-    const subscription = authStateChange.data.subscription;
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // ✅ NAVIGATION LOGIC (page-aware + role-based)
-  const navLinks = useMemo(() => {
-    if (!user) return [];
-
-    switch (profile?.role) {
-      case 'admin':
-        if (pathname?.includes('/admin')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else if (pathname?.includes('/analytics')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/admin', label: 'Admin' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else if (pathname?.includes('/guide')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/admin', label: 'Admin' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/analytics', label: 'Analytics' },
-          ];
-        } else if (pathname?.includes('/home')) {
-          return [
-            { href: '/admin', label: 'Admin' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else if (pathname?.includes('/create-quiz')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/admin', label: 'Admin' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/admin', label: 'Admin' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        }
-
-      case 'teacher':
-        if (pathname?.includes('/analytics')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else if (pathname?.includes('/guide')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/analytics', label: 'Analytics' },
-          ];
-        } else if (pathname?.includes('/home')) {
-          return [
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else if (pathname?.includes('/create-quiz')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/create-quiz', label: 'Create Quiz' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        }
-
-      default:
-        // Handles teacher, student, and other roles
-        if (pathname?.includes('/analytics')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else if (pathname?.includes('/guide')) {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/analytics', label: 'Analytics' },
-          ];
-        } else if (pathname?.includes('/home')) {
-          return [
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        } else {
-          return [
-            { href: '/home', label: 'Home' },
-            { href: '/analytics', label: 'Analytics' },
-            { href: '/guide', label: 'Guide' },
-          ];
-        }
-      
-    }
-  }, [user, profile, pathname]);
-
-  // ✅ LOADING STATE
-  if (isLoading) {
+  if (loading) {
     return (
       <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="animate-pulse bg-gray-200 h-8 w-32 rounded"></div>
+            <div className="animate-pulse bg-gray-200 h-8 w-32 rounded" />
           </div>
         </div>
       </nav>
     );
   }
 
-  // ✅ HIDE NAVBAR IF NO USER (not logged in)
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  // ✅ MAIN NAVBAR RENDER - ALL LINKS ON RIGHT
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo (LEFT) */}
           <Link href="/" className="text-xl font-bold text-blue-600">
             BioLearn
           </Link>
 
-          {/* Desktop Navigation + Auth (ALL ON RIGHT) */}
           <div className="hidden md:flex items-center space-x-8">
-            {/* ✅ All nav links aligned to the right */}
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -312,41 +189,29 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            
-            {/* ✅ Profile menu on the right */}
-            <UserMenu user={user} profile={profile} />
+            <UserMenu user={user} profile={profile} onSignOut={logout} />
           </div>
 
-          {/* Mobile Menu Button */}
           <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onClick={() => setMobileMenuOpen((o) => !o)}
             className="md:hidden text-gray-700 hover:text-blue-600 p-2"
             aria-label="Toggle menu"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {mobileMenuOpen && (
         <MobileMenu
           user={user}
           profile={profile}
           navLinks={navLinks}
           onClose={() => setMobileMenuOpen(false)}
+          onSignOut={logout}
         />
       )}
     </nav>

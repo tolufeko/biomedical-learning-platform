@@ -30,14 +30,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Navbar />
-
-        <AuthProvider>
-          <main className="pt-16 min-h-screen">
-            {children}
-          </main>
-        </AuthProvider>
         
+        <AuthProvider>
+          <Navbar /> 
+          <main>{children}</main>
+        </AuthProvider>
+
         <footer className="bg-white border-t py-6">
           <div className="max-w-7xl mx-auto px-4 text-center text-gray-500 text-sm">
             © {new Date().getFullYear()} Biomedical Learning Platform
