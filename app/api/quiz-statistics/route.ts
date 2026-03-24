@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     const userId = searchParams.get('user_id');
     const username = searchParams.get('username');
     const quizId = searchParams.get('quiz_id');
+    const moduleId = searchParams.get('module');
 
     const currentUserRole = await getUserRole(currentUser.id);
 
@@ -87,6 +88,45 @@ export async function GET(request: Request) {
         if (error) throw error;
         analyticsData = data || [];
       }
+    } else if (moduleId) {
+      const { data: moduleQuizzes, error: moduleError } = await supabaseAdmin
+        .from('quiz')
+        .select('id')
+        .eq('module', moduleId);
+    
+      if (moduleError) throw moduleError;
+    
+      if (!moduleQuizzes || moduleQuizzes.length === 0) {
+        return NextResponse.json({
+          average_score: 0, average_time_spent: 0,
+          highest_error_question: null, total_attempts: 0, data_available: false
+        });
+      }
+    
+      const { data: assignments, error: assignmentsError } = await supabaseAdmin
+        .from('question_assignments')
+        .select('id')
+        .in('quiz_id', moduleQuizzes.map(q => q.id));
+    
+      if (assignmentsError) throw assignmentsError;
+    
+      if (!assignments || assignments.length === 0) {
+        return NextResponse.json({
+          average_score: 0, average_time_spent: 0,
+          highest_error_question: null, total_attempts: 0, data_available: false
+        });
+      }
+    
+      let query = supabaseAdmin
+        .from('analytics')
+        .select(analyticsSelect)
+        .in('question_assignment_id', assignments.map(a => a.id));
+    
+      if (resolvedUserId) query = query.eq('user_id', resolvedUserId);
+    
+      const { data, error } = await query;
+      if (error) throw error;
+      analyticsData = data || [];
     } else {
       let query = supabaseAdmin.from('analytics').select(analyticsSelect);
       if (resolvedUserId) query = query.eq('user_id', resolvedUserId);

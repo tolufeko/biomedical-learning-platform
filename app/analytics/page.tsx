@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
 
-// ── Types ──────────────────────────────────────────────────────────────────
 interface HotspotAnswer { x: number; y: number; }
 interface QuizQuestion {
   id: string; question_type: string; question_text: string; options: string[];
@@ -15,7 +14,7 @@ interface QuizQuestion {
 }
 interface Quiz {
   id: string; title: string; description?: string; questions: QuizQuestion[];
-  created_at: string; updated_at: string; user_id: string;
+  created_at: string; updated_at: string; user_id: string; module: string;
 }
 interface HardestQuestion {
   question_id: string; question_text: string; error_rate: number;
@@ -30,30 +29,36 @@ interface QuizStatistics {
 const ALL_VIEW_MODES = [
   { key: 'general', label: 'All Students & Quizzes' },
   { key: 'quiz',    label: 'Specific Quiz' },
+  { key: 'module',  label: 'Specific Module' },
   { key: 'student', label: 'Specific Student' },
 ] as const;
 
 const STUDENT_VIEW_MODES = [
   { key: 'general', label: 'My Overall Stats' },
   { key: 'quiz',    label: 'Specific Quiz' },
+  { key: 'module',  label: 'Specific Module' },
 ] as const;
 
-type ViewMode = 'general' | 'quiz' | 'student';
+type ViewMode = 'general' | 'quiz' | 'module' | 'student';
 
-// ── Component ──────────────────────────────────────────────────────────────
-export default function TeacherPage() {
+export default function AnalyticsPage() {
   const router = useRouter();
   const { user, role } = useAuth();
+
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<QuizStatistics | null>(null);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('general');
   const [selectedQuizId, setSelectedQuizId] = useState('');
+  const [selectedModule, setSelectedModule] = useState('');
   const [selectedUserName, setSelectedUserName] = useState('');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const isPrivileged = role === 'teacher' || role === 'admin';
   const viewModes = isPrivileged ? ALL_VIEW_MODES : STUDENT_VIEW_MODES;
+
+  // Derive unique modules from quizzes
+  const modules = Array.from(new Set(quizzes.map(q => q.module).filter(Boolean))).sort();
 
   useEffect(() => {
     fetch('/api/quizzes')
@@ -62,15 +67,22 @@ export default function TeacherPage() {
       .catch(() => setError('Failed to load quizzes'));
   }, []);
 
+  useEffect(() => {
+    if (!user) router.push("/");
+  }, [user, role, router]);
+
+  useEffect(() => {
+    if (!isPrivileged && viewMode === 'student') setViewMode('general');
+  }, [role]);
+
   const fetchStatistics = async () => {
     setAnalyticsLoading(true);
     try {
       const params = new URLSearchParams();
       if (viewMode === 'quiz' && selectedQuizId) params.append('quiz_id', selectedQuizId);
-      // Only privileged roles can filter by another student's username
-      if (isPrivileged && viewMode === 'student' && selectedUserName) {
-        params.append('username', selectedUserName);
-      }
+      if (viewMode === 'module' && selectedModule) params.append('module', selectedModule);
+      if (isPrivileged && viewMode === 'student' && selectedUserName) params.append('username', selectedUserName);
+
       const res = await fetch(`/api/quiz-statistics${params.toString() ? `?${params}` : ''}`);
       setStats(await res.json());
     } catch {
@@ -81,19 +93,7 @@ export default function TeacherPage() {
     }
   };
 
-    // Access check
-    useEffect(() => {
-      if (!user) {
-        router.push("/");
-      }
-    }, [user, role, router]);
-
-  // Reset viewMode if role changes and current mode isn't available
-  useEffect(() => {
-    if (!isPrivileged && viewMode === 'student') setViewMode('general');
-  }, [role]);
-
-  useEffect(() => { fetchStatistics(); }, [role, viewMode, selectedQuizId, selectedUserName]);
+  useEffect(() => { fetchStatistics(); }, [role, viewMode, selectedQuizId, selectedModule, selectedUserName]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -114,7 +114,6 @@ export default function TeacherPage() {
           </p>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-6">
           {viewModes.map(({ key, label }) => (
             <button
@@ -133,7 +132,6 @@ export default function TeacherPage() {
 
         <Card>
           <CardContent className="pt-6">
-            {/* Filters */}
             {viewMode === 'quiz' && (
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Quiz</label>
@@ -144,6 +142,20 @@ export default function TeacherPage() {
                 >
                   <option value="">-- Choose a quiz --</option>
                   {quizzes.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
+                </select>
+              </div>
+            )}
+
+            {viewMode === 'module' && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Module</label>
+                <select
+                  value={selectedModule}
+                  onChange={(e) => setSelectedModule(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">-- Choose a module --</option>
+                  {modules.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
             )}
@@ -161,7 +173,6 @@ export default function TeacherPage() {
               </div>
             )}
 
-            {/* Stats */}
             {analyticsLoading ? (
               <div className="text-center py-6 text-gray-600">Loading analytics...</div>
             ) : stats?.data_available ? (
