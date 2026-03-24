@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/AuthContext";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 interface UserProfile {
   id: string;
@@ -50,7 +50,7 @@ export default function AdminDashboard() {
   const fetchUsers = async () => {
     try {
       setMessage("");
-      const response = await fetch('/api/admin-users');
+      const response = await fetch('/api/update-roles');
       if (!response.ok) throw new Error('Failed to fetch users');
       
       const profiles = await response.json();
@@ -65,7 +65,7 @@ export default function AdminDashboard() {
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
       setUpdating(userId);
-      const response = await fetch('/api/adminusers', {
+      const response = await fetch('/api/update-roles', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, role: newRole }),

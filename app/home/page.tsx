@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/lib/AuthContext";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { ArrowLeft } from 'lucide-react';
 
 interface Quiz {

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/lib/AuthContext";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { useEffect } from "react";
 
 export default function HelpPage() {

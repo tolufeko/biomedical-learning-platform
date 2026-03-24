@@ -1,8 +1,9 @@
+// app/forgot-password/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase/supabaseClient";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
@@ -91,7 +92,7 @@ export default function UpdatePasswordPage() {
           {message && (
             <p
               className={`text-sm text-center ${
-                message.startsWith("Error") || message.startsWith("Password")
+                message.startsWith("Error") || message === "Passwords do not match!" || message.includes("at least")
                   ? "text-red-600"
                   : "text-green-600"
               }`}

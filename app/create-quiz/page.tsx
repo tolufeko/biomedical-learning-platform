@@ -5,12 +5,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/lib/AuthContext";
+import { useAuth } from "@/lib/auth/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
 
 // =============== TYPES ===============
 interface HotspotAnswer { x: number; y: number; }
 type QuestionCorrectAnswer = string | string[] | HotspotAnswer[];
+
 interface QuizQuestion {
   id: string;
   question_type: string;
@@ -23,38 +24,23 @@ interface QuizQuestion {
   question_topic?: string;
   question_feedback?: string;
 }
+
 interface Quiz {
-  id: string; 
-  title: string; 
-  description?: string; 
+  id: string;
+  title: string;
+  description?: string;
   questions: QuizQuestion[];
-  created_at: string; 
-  updated_at: string; 
+  created_at: string;
+  updated_at: string;
   user_id: string;
   module: string;
 }
-interface HardestQuestion {
-  question_id: string;
-  question_text: string;
-  error_rate: number;
-  total_attempts: number;
-  incorrect_attempts: number;
-}
-interface QuizStatistics {
-  average_score: number;
-  average_time_spent: number;
-  highest_error_question: HardestQuestion | null;
-  total_attempts: number;
-  data_available: boolean;
-}
 
-// =============== MAIN COMPONENT ===============
 export default function TeacherPage() {
   const router = useRouter();
   const { role, user } = useAuth();
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [stats, setStats] = useState<QuizStatistics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [formSearchTerm, setFormSearchTerm] = useState("");
@@ -64,8 +50,7 @@ export default function TeacherPage() {
   const [resetFormKey, setResetFormKey] = useState(0);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showQuizzesList, setShowQuizzesList] = useState(false);
-  
-  // Access check
+
   useEffect(() => {
     if (!user) {
       router.push("/");
@@ -74,7 +59,6 @@ export default function TeacherPage() {
     }
   }, [user, role, router]);
 
-  // Clear messages
   useEffect(() => {
     if (error || success) {
       const timer = setTimeout(() => { setError(null); setSuccess(null); }, 5000);
@@ -82,34 +66,29 @@ export default function TeacherPage() {
     }
   }, [error, success]);
 
-  // Fetch quizzes (for dropdown)
+  useEffect(() => {
+    if (role === 'teacher' || role === 'admin') fetchQuizzes();
+  }, [role]);
+
   const fetchQuizzes = async () => {
     setFormsLoading(true);
     try {
       const res = await fetch('/api/quizzes');
       const data = await res.json();
       setQuizzes(Array.isArray(data) ? data : []);
-    } catch (err) {
+    } catch {
       setError('Failed to load quizzes');
     } finally {
       setFormsLoading(false);
     }
   };
 
-   // Refetch stats when filters change
-   useEffect(() => {
-    if (role === 'teacher' || role === 'admin') {
-      fetchQuizzes();
-    }
-  }, [role]);
-
-  // =============== Handlers ===============
-  const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string; module: string}) => {
+  const handleFormSubmit = async (formData: { title: string; questions: any[]; description?: string; module: string }) => {
     try {
       const response = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, userId: user?.id }),
+        body: JSON.stringify(formData),
       });
       const result = await response.json();
       if (response.ok) {
@@ -129,7 +108,7 @@ export default function TeacherPage() {
       const response = await fetch(`/api/quizzes/${editingForm.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, userId: user?.id }),
+        body: JSON.stringify(formData),
       });
       const result = await response.json();
       if (response.ok) {
@@ -147,19 +126,14 @@ export default function TeacherPage() {
     if (!confirm(`Delete "${quizTitle}"?`)) return;
     try {
       const res = await fetch(`/api/quizzes/${quizId}`, { method: 'DELETE' });
-      
-      // ✅ Get actual error message
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(errorData.error || `HTTP ${res.status}`);
       }
-      
       setSuccess('Quiz deleted successfully!');
       fetchQuizzes();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Delete failed';
-      console.error('Delete error:', err);
-      setError(`Delete failed: ${errorMessage}`);
+      setError(`Delete failed: ${err instanceof Error ? err.message : 'Delete failed'}`);
     }
   };
 
@@ -171,51 +145,29 @@ export default function TeacherPage() {
       setEditingForm(fullQuiz);
       setIsEditModalOpen(true);
       setShowQuizzesList(true);
-    } catch (err) {
+    } catch {
       setError('Could not load quiz for editing');
     } finally {
       setFormsLoading(false);
     }
   };
 
-  const handleCloseEditModal = () => {
-    setEditingForm(null);
-    setIsEditModalOpen(false);
-  };
-
-  const convertQuizQuestions = (questions: QuizQuestion[]) => {
-    return questions.map(q => {
-      if (q.question_type === 'hotspot') {
-        return {
-          type: q.question_type,
-          question: q.question_text,
-          options: q.options || [],
-          correctAnswer: q.correct_answer,
-          image_url: q.image_url || '',
-          image_path: q.image_path || '',
-          question_topic: q.question_topic || undefined,
-          question_feedback: q.question_feedback || undefined,
-        };
-      }
-      return {
-        type: q.question_type,
-        question: q.question_text,
-        options: q.options || [],
-        correctAnswer: q.correct_answer,
-        image_url: q.image_url || undefined, 
-        image_path: q.image_path || undefined, 
-        question_topic: q.question_topic || undefined,
-        question_feedback: q.question_feedback || undefined,
-      };
-    });
-  };
+  const convertQuizQuestions = (questions: QuizQuestion[]) =>
+    questions.map(q => ({
+      type: q.question_type,
+      question: q.question_text,
+      options: q.options || [],
+      correctAnswer: q.correct_answer,
+      image_url: q.image_url || (q.question_type === 'hotspot' ? '' : undefined),
+      image_path: q.image_path || (q.question_type === 'hotspot' ? '' : undefined),
+      question_topic: q.question_topic || undefined,
+      question_feedback: q.question_feedback || undefined,
+    }));
 
   if (role !== 'teacher' && role !== 'admin') return null;
 
-  // =============== RENDER ===============
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Messages */}
       {error && (
         <div className="max-w-6xl mx-auto mt-6 px-6">
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
@@ -239,7 +191,6 @@ export default function TeacherPage() {
           <p className="text-gray-600">Create quizzes</p>
         </div>
 
-        {/* Create Quiz Section */}
         <div className="mb-8">
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
@@ -257,7 +208,6 @@ export default function TeacherPage() {
           )}
         </div>
 
-        {/* Quizzes List Section */}
         <div>
           <button
             onClick={() => setShowQuizzesList(!showQuizzesList)}
@@ -278,7 +228,6 @@ export default function TeacherPage() {
                     className="w-full p-3 border border-gray-300 rounded-lg"
                   />
                 </div>
-                {/* ... rest of quiz list rendering ... */}
                 {formsLoading ? (
                   <div className="text-center py-8">Loading quizzes...</div>
                 ) : (
@@ -319,16 +268,13 @@ export default function TeacherPage() {
                       ))}
                   </div>
                 )}
-                {/* Empty states */}
                 {!formsLoading && quizzes.filter(q => q.title.toLowerCase().includes(formSearchTerm.toLowerCase())).length === 0 && (
                   <div className="text-center text-gray-500 py-12">
                     <div className="text-lg mb-2">
                       {formSearchTerm ? 'No quizzes found' : 'No quizzes created yet'}
                     </div>
                     <p className="text-sm">
-                      {formSearchTerm
-                        ? `No quizzes match "${formSearchTerm}"`
-                        : 'Create your first quiz using the quiz builder above!'}
+                      {formSearchTerm ? `No quizzes match "${formSearchTerm}"` : 'Create your first quiz using the quiz builder above!'}
                     </p>
                   </div>
                 )}
@@ -338,14 +284,13 @@ export default function TeacherPage() {
         </div>
       </div>
 
-      {/* Edit Modal */}
       {isEditModalOpen && editingForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Edit Quiz: {editingForm.title}</h2>
-                <button onClick={handleCloseEditModal} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+                <button onClick={() => { setEditingForm(null); setIsEditModalOpen(false); }} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
               </div>
               <QuestionForm
                 onFormSubmit={handleFormUpdate}
@@ -353,7 +298,7 @@ export default function TeacherPage() {
                   title: editingForm.title,
                   module: editingForm.module,
                   description: editingForm.description || '',
-                  questions: convertQuizQuestions(editingForm.questions)
+                  questions: convertQuizQuestions(editingForm.questions),
                 }}
                 isEditing={true}
               />

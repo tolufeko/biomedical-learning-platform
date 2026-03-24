@@ -1,112 +1,60 @@
-//app/api/quiz-analytics/route.ts
+// app/api/quiz-analytics/route.ts
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
+import { getServerUser } from '@/lib/auth/getServerUser';
+import { getUserRole, canAccessUserData } from '@/lib/auth/permissions';
+import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseAdmin = supabaseServer();
 
 export async function POST(request: Request) {
   try {
-    // ✅ GET AUTHENTICATED USER FROM COOKIES
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
-    
-    const userData = await supabase.auth.getUser();
-    const user = userData.data?.user;
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 
-    if (userData.error || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Login required' },
-        { status: 401 }
-      );
-    }
-
-    // ✅ PARSE REQUEST BODY (NOW INCLUDES question_assignment_id)
     const { question_assignment_id, correct, time_spent } = await request.json();
 
-    // ✅ VALIDATE REQUIRED FIELDS
-    if (
-      !question_assignment_id ||
-      typeof correct !== 'boolean' ||
-      typeof time_spent !== 'number'
-    ) {
+    if (!question_assignment_id || typeof correct !== 'boolean' || typeof time_spent !== 'number') {
       return NextResponse.json(
         { error: 'Missing required fields: question_assignment_id, correct, time_spent' },
         { status: 400 }
       );
     }
 
-    // ✅ INSERT ANALYTICS WITH QUESTION_ASSIGNMENT_ID
     const { data, error } = await supabaseAdmin
       .from('analytics')
-      .insert({
-        question_assignment_id, // ✅ NEW: Links to specific quiz+question context
-        user_id: user.id,
-        correct,
-        time_spent,
-      })
+      .insert({ question_assignment_id, user_id: user.id, correct, time_spent })
       .select()
       .single();
 
     if (error) throw error;
 
-    return NextResponse.json({ 
-      success: true, 
-      data,
-      logged_for: user.id 
-    });
+    return NextResponse.json({ success: true, data, logged_for: user.id });
 
   } catch (error: any) {
     console.error('🐞 Error saving analytics:', error);
-    return NextResponse.json(
-      { error: 'Failed to save analytics' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to save analytics' }, { status: 500 });
   }
 }
 
-// ✅ GET HANDLER (for admin/debug use - remains unchanged)
 export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
-
-    const userData = await supabase.auth.getUser();
-    const user = userData.data?.user;
-
-    if (userData.error || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Login required' },
-        { status: 401 }
-      );
-    }
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
     const questionAssignmentId = searchParams.get('question_assignment_id');
-
-    // teachers can query any user, everyone else is scoped to their own session
-    const teacherCheck = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    const isTeacher = ['admin', 'teacher'].includes(teacherCheck.data?.role ?? '');
-
     const requestedUserId = searchParams.get('user_id');
-    const targetUserId = isTeacher && requestedUserId ? requestedUserId : user.id;
+
+    const role = await getUserRole(user.id);
+    const isPrivileged = role === 'teacher' || role === 'admin';
+    const targetUserId = isPrivileged && requestedUserId ? requestedUserId : user.id;
+
+    if (requestedUserId) {
+      const access = await canAccessUserData(user.id, requestedUserId);
+      if (!access.allowed) {
+        return NextResponse.json({ error: 'Forbidden', reason: access.reason }, { status: 403 });
+      }
+    }
 
     let query = supabaseAdmin.from('analytics').select(`
       *,
@@ -117,20 +65,15 @@ export async function GET(request: Request) {
       profiles (username)
     `).eq('user_id', targetUserId);
 
-    if (questionAssignmentId) {
-      query = query.eq('question_assignment_id', questionAssignmentId);
-    }
+    if (questionAssignmentId) query = query.eq('question_assignment_id', questionAssignmentId);
 
     const { data, error } = await query;
-
     if (error) throw error;
 
     return NextResponse.json({ data });
+
   } catch (error) {
     console.error('Error fetching analytics:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch analytics' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 });
   }
 }

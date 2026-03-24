@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/lib/auth/AuthContext';
 import type { User } from '@supabase/supabase-js';
 
 type UserRole = 'student' | 'teacher' | 'admin'| 'guest';

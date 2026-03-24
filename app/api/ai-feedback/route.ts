@@ -1,17 +1,13 @@
-// app/api/quiz-feedback/route.ts
+// app/api/ai-feedback/route.ts
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 import OpenAI from 'openai';
+import { getServerUser } from '@/lib/auth/getServerUser';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ── Cooldown guard ────────────────────────────────────────────────────────────
-// Resets on server restart — intentional, this is a soft abuse guard only
 const recentRequests = new Map<string, number>();
-const COOLDOWN_MS = 60_000; // 1 minute between requests per user
+const COOLDOWN_MS = 60_000;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 export interface QuizFeedbackQuestion {
   questionText: string;
   questionType: string;
@@ -27,7 +23,6 @@ export interface QuizFeedbackPayload {
   questions: QuizFeedbackQuestion[];
 }
 
-// ── Prompt builder ────────────────────────────────────────────────────────────
 function buildPrompt(payload: QuizFeedbackPayload): string {
   const incorrectQuestions = payload.questions.filter(q => !q.correct);
   const slowQuestions = payload.questions
@@ -74,28 +69,11 @@ ${slowQuestions.length > 0 ? `Also note that they spent a long time on: ${slowQu
 Keep the total response under 400 words. Use plain language. No bullet points inside sections — write in short paragraphs.`;
 }
 
-// ── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
-    // Auth check
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 
-    const userData = await supabase.auth.getUser();
-    const user = userData.data?.user;
-
-    if (userData.error || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Login required' },
-        { status: 401 }
-      );
-    }
-
-    // Cooldown check
     const lastCall = recentRequests.get(user.id);
     if (lastCall && Date.now() - lastCall < COOLDOWN_MS) {
       const secondsLeft = Math.ceil((COOLDOWN_MS - (Date.now() - lastCall)) / 1000);
@@ -105,7 +83,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse and validate payload
     const payload: QuizFeedbackPayload = await request.json();
 
     if (
@@ -120,15 +97,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clamp questions to 20 to keep prompt size reasonable
-    if (payload.questions.length > 20) {
-      payload.questions = payload.questions.slice(0, 20);
-    }
+    if (payload.questions.length > 20) payload.questions = payload.questions.slice(0, 20);
 
-    // Record timestamp BEFORE the OpenAI call so even slow responses count
     recentRequests.set(user.id, Date.now());
 
-    // Stream from OpenAI
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: buildPrompt(payload) }],
@@ -159,9 +131,6 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('🐞 Quiz feedback API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate feedback. Please try again.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to generate feedback. Please try again.' }, { status: 500 });
   }
 }

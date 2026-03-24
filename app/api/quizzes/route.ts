@@ -1,110 +1,67 @@
 // app/api/quizzes/route.ts
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { NextResponse } from 'next/server';
+import { getServerUser } from '@/lib/auth/getServerUser';
+import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// ✅ Helper: get authenticated user from session
-async function getSessionUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  );
-  const userData = await supabase.auth.getUser();
-  return { user: userData.data?.user ?? null, error: userData.error };
-}
+const supabaseAdmin = supabaseServer();
 
 export async function GET() {
   try {
-    // ✅ VERIFY AUTHENTICATION
-    const { user, error } = await getSessionUser();
-    if (error || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized: Login required" },
-        { status: 401 }
-      );
-    }
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 
     const { data: quizzes, error: quizError } = await supabaseAdmin
-      .from("quiz")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .from('quiz')
+      .select('*')
+      .order('created_at', { ascending: false });
 
     if (quizError) throw quizError;
     if (!quizzes) return NextResponse.json([]);
 
-    const quizIds = quizzes.map(q => q.id);
-
     const { data: assignments, error: assignError } = await supabaseAdmin
-      .from("question_assignments")
+      .from('question_assignments')
       .select(`
         quiz_id,
         display_order,
         questions (
-          id,
-          question_type,
-          question_text,
-          options,
-          correct_answer,
-          image_path,
-          question_topic,
-          question_feedback,
-          creator_id
+          id, question_type, question_text, options, correct_answer,
+          image_path, question_topic, question_feedback, creator_id
         )
       `)
-      .in("quiz_id", quizIds)
-      .order("display_order", { ascending: true });
+      .in('quiz_id', quizzes.map(q => q.id))
+      .order('display_order', { ascending: true });
 
     if (assignError) throw assignError;
 
-    const quizzesWithQuestions = quizzes.map(quiz => {
-      const relatedAssignments = assignments?.filter(a => a.quiz_id === quiz.id) || [];
-      const questions = relatedAssignments.map(a => a.questions).filter(Boolean);
-      return { ...quiz, questions };
-    });
-
-    return NextResponse.json(quizzesWithQuestions);
+    return NextResponse.json(
+      quizzes.map(quiz => ({
+        ...quiz,
+        questions: assignments?.filter(a => a.quiz_id === quiz.id).map(a => a.questions).filter(Boolean) || [],
+      }))
+    );
   } catch (err: any) {
-    console.error("API GET error:", err);
+    console.error('API GET error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    // ✅ VERIFY AUTHENTICATION
-    const { user, error } = await getSessionUser();
-    if (error || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized: Login required" },
-        { status: 401 }
-      );
-    }
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 
-    const formData = await request.json();
-    const { title, module, questions, description } = formData; // ✅ userId removed from body
+    const { title, module, questions, description } = await request.json();
 
     if (!title || !module || !questions) {
-      return NextResponse.json(
-        { error: "Title, module and questions are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Title, module and questions are required' }, { status: 400 });
     }
 
     const { data: quiz, error: quizError } = await supabaseAdmin
-      .from("quiz")
+      .from('quiz')
       .insert([{
-        title,
-        module,
+        title, module,
         description: description || null,
-        user_id: user.id, // ✅ taken from session
+        user_id: user.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }])
@@ -127,7 +84,7 @@ export async function POST(request: Request) {
       }
 
       const { data: newQ, error: qError } = await supabaseAdmin
-        .from("questions")
+        .from('questions')
         .insert([{
           question_type: q.type,
           question_text: q.question,
@@ -142,7 +99,7 @@ export async function POST(request: Request) {
         .single();
 
       if (qError) {
-        await supabaseAdmin.from("quiz").delete().eq("id", quiz.id);
+        await supabaseAdmin.from('quiz').delete().eq('id', quiz.id);
         throw qError;
       }
 
@@ -151,27 +108,26 @@ export async function POST(request: Request) {
     }
 
     if (assignments.length > 0) {
-      const { error: assignError } = await supabaseAdmin
-        .from("question_assignments")
-        .insert(assignments);
+      const { error: assignError } = await supabaseAdmin.from('question_assignments').insert(assignments);
       if (assignError) throw assignError;
     }
 
-    const finalQuestions = insertedQuestions.map((q, idx) => ({
-      id: q.id,
-      question_type: questions[idx].type,
-      question_text: questions[idx].question,
-      options: questions[idx].options,
-      correct_answer: questions[idx].correctAnswer,
-      image_path: questions[idx].image_path,
-      question_topic: questions[idx].question_topic,
-      question_feedback: questions[idx].question_feedback,
-      creator_id: user.id,
-    }));
-
-    return NextResponse.json({ ...quiz, questions: finalQuestions });
+    return NextResponse.json({
+      ...quiz,
+      questions: insertedQuestions.map((q, idx) => ({
+        id: q.id,
+        question_type: questions[idx].type,
+        question_text: questions[idx].question,
+        options: questions[idx].options,
+        correct_answer: questions[idx].correctAnswer,
+        image_path: questions[idx].image_path,
+        question_topic: questions[idx].question_topic,
+        question_feedback: questions[idx].question_feedback,
+        creator_id: user.id,
+      })),
+    });
   } catch (err: any) {
-    console.error("API POST error:", err);
+    console.error('API POST error:', err);
     return NextResponse.json({ error: err.message, details: err }, { status: 500 });
   }
 }

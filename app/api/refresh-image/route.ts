@@ -1,33 +1,14 @@
 // app/api/refresh-image/route.ts
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { type NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { getServerUser } from '@/lib/auth/getServerUser';
+import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseAdmin = supabaseServer();
 
 export async function POST(request: NextRequest) {
   try {
-    // ✅ VERIFY AUTHENTICATION
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
-
-    const userData = await supabase.auth.getUser();
-    const user = userData.data?.user;
-
-    if (userData.error || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Login required' },
-        { status: 401 }
-      );
-    }
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 
     const { filePath } = await request.json();
 

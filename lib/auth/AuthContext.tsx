@@ -2,11 +2,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase/supabaseClient";
 import type { User, Session } from "@supabase/supabase-js";
-
-// ✅ Explicit role union instead of loose string
-type UserRole = "student" | "teacher" | "admin" | "guest";
+import type { UserRole } from "@/lib/constants/roles";
 
 interface AuthContextType {
   user: User | null; // ✅ Typed with Supabase's User instead of any

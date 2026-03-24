@@ -1,9 +1,10 @@
+// app/analytics/page.tsx
 'use client';
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { useAuth } from "@/lib/AuthContext";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface HotspotAnswer { x: number; y: number; }
@@ -25,8 +26,6 @@ interface QuizStatistics {
   highest_error_question: HardestQuestion | null;
   total_attempts: number; data_available: boolean;
 }
-
-const PRIVILEGED_ROLES = ['teacher', 'admin'];
 
 const ALL_VIEW_MODES = [
   { key: 'general', label: 'All Students & Quizzes' },
@@ -53,7 +52,7 @@ export default function TeacherPage() {
   const [selectedUserName, setSelectedUserName] = useState('');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
-  const isPrivileged = PRIVILEGED_ROLES.includes(role ?? '');
+  const isPrivileged = role === 'teacher' || role === 'admin';
   const viewModes = isPrivileged ? ALL_VIEW_MODES : STUDENT_VIEW_MODES;
 
   useEffect(() => {

@@ -1,59 +1,28 @@
 // app/api/upload/route.ts
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { type NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { getServerUser } from '@/lib/auth/getServerUser';
+import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseAdmin = supabaseServer();
 
 export async function POST(request: NextRequest) {
   try {
-    // ✅ VERIFY AUTHENTICATION
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-    );
-
-    const userData = await supabase.auth.getUser();
-    const user = userData.data?.user;
-
-    if (userData.error || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Login required' },
-        { status: 401 }
-      );
-    }
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 
     const formData = await request.formData();
     const file = formData.get('image') as File | null;
 
-    if (!file || file.size === 0) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 5MB)' }, { status: 400 });
-    }
+    if (!file || file.size === 0) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
+    if (file.size > 5 * 1024 * 1024) return NextResponse.json({ error: 'File too large (max 5MB)' }, { status: 400 });
 
     const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const fileName = `quiz-${Date.now()}-${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
-    const filePath = `uploads/${fileName}`;
-
-    const arrayBuffer = await file.arrayBuffer();
+    const filePath = `uploads/quiz-${Date.now()}-${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
 
     const { error: uploadError } = await supabaseAdmin.storage
       .from('quiz-images')
-      .upload(filePath, arrayBuffer, {
-        contentType: file.type,
-        upsert: false,
-      });
+      .upload(filePath, await file.arrayBuffer(), { contentType: file.type, upsert: false });
 
     if (uploadError) {
       console.error('Upload error:', uploadError);

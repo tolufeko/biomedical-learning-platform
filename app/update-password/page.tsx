@@ -1,14 +1,14 @@
+// app/update-password/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabase/supabaseClient";
 import Link from "next/link";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -16,13 +16,9 @@ export default function ChangePasswordPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Check if user is logged in
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        router.push("/");
-      } else {
-        setUser(user);
-      }
+      if (!user) router.push("/");
+      else setUser(user);
     });
   }, [router]);
 
@@ -30,7 +26,6 @@ export default function ChangePasswordPage() {
     e.preventDefault();
     setMessage("");
 
-    // Validation
     if (newPassword !== confirmPassword) {
       setMessage("New passwords do not match!");
       setMessageType("error");
@@ -43,53 +38,20 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    if (currentPassword === newPassword) {
-      setMessage("New password must be different from current password.");
-      setMessageType("error");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // Verify current password by attempting to sign in
-      if (!user?.email) {
-        setMessage("User email not found. Please log in again.");
-        setMessageType("error");
-        setLoading(false);
-        return;
-      }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      });
-
-      if (signInError) {
-        setMessage("Current password is incorrect.");
-        setMessageType("error");
-        setLoading(false);
-        return;
-      }
-
-      // Update to new password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (updateError) {
-        setMessage("Error updating password: " + updateError.message);
+      if (error) {
+        setMessage("Error updating password: " + error.message);
         setMessageType("error");
       } else {
         setMessage("Password changed successfully! Redirecting...");
         setMessageType("success");
-        setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
-        
-        setTimeout(() => {
-          router.push("/");
-        }, 2000);
+        setTimeout(() => router.push("/"), 2000);
       }
     } catch (err) {
       setMessage("An unexpected error occurred. Please try again.");
@@ -118,20 +80,6 @@ export default function ChangePasswordPage() {
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>
             <label className="block text-gray-700 text-sm font-medium mb-2">
-              Current Password
-            </label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-              className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-2">
               New Password
             </label>
             <input
@@ -142,9 +90,7 @@ export default function ChangePasswordPage() {
               className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Must be at least 6 characters
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
           </div>
 
           <div>
@@ -162,13 +108,9 @@ export default function ChangePasswordPage() {
           </div>
 
           {message && (
-            <div
-              className={`text-sm text-center p-3 rounded-lg ${
-                messageType === "error"
-                  ? "bg-red-50 text-red-600"
-                  : "bg-green-50 text-green-600"
-              }`}
-            >
+            <div className={`text-sm text-center p-3 rounded-lg ${
+              messageType === "error" ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
+            }`}>
               {message}
             </div>
           )}
