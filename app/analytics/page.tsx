@@ -20,10 +20,18 @@ interface HardestQuestion {
   question_id: string; question_text: string; error_rate: number;
   total_attempts: number; incorrect_attempts: number;
 }
+interface TopicStat {
+  topic: string;
+  total: number;
+  correct: number;
+  incorrect: number;
+  error_rate: number;
+}
 interface QuizStatistics {
   average_score: number; average_time_spent: number;
   highest_error_question: HardestQuestion | null;
   total_attempts: number; data_available: boolean;
+  topic_breakdown: TopicStat[];
 }
 
 const ALL_VIEW_MODES = [
@@ -176,33 +184,70 @@ export default function AnalyticsPage() {
             {analyticsLoading ? (
               <div className="text-center py-6 text-gray-600">Loading analytics...</div>
             ) : stats?.data_available ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[
-                  { label: 'Avg. Score',      value: `${stats.average_score}%`, color: 'blue' },
-                  { label: 'Avg. Time (sec)', value: stats.average_time_spent,   color: 'green' },
-                  { label: 'Total Attempts',  value: stats.total_attempts,       color: 'purple' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className={`bg-${color}-50 p-4 rounded-lg text-center`}>
-                    <p className="text-sm text-gray-600">{label}</p>
-                    <p className={`text-2xl font-bold text-${color}-700`}>{value}</p>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  {[
+                    { label: 'Avg. Score',      value: `${stats.average_score}%`, color: 'blue' },
+                    { label: 'Avg. Time (sec)', value: stats.average_time_spent,   color: 'green' },
+                    { label: 'Total Attempts',  value: stats.total_attempts,       color: 'purple' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className={`bg-${color}-50 p-4 rounded-lg text-center`}>
+                      <p className="text-sm text-gray-600">{label}</p>
+                      <p className={`text-2xl font-bold text-${color}-700`}>{value}</p>
+                    </div>
+                  ))}
+                  <div className="bg-red-50 p-4 rounded-lg text-center">
+                    {stats.highest_error_question ? (
+                      <>
+                        <p className="text-sm text-gray-600">Hardest Question</p>
+                        <p className="text-xs font-medium text-gray-800 mt-1 line-clamp-2">
+                          "{stats.highest_error_question.question_text}"
+                        </p>
+                        <p className="text-sm mt-2 text-red-700 font-bold">
+                          {stats.highest_error_question.error_rate}% error
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-500">No question data</p>
+                    )}
                   </div>
-                ))}
-                <div className="bg-red-50 p-4 rounded-lg text-center">
-                  {stats.highest_error_question ? (
-                    <>
-                      <p className="text-sm text-gray-600">Hardest Question</p>
-                      <p className="text-xs font-medium text-gray-800 mt-1 line-clamp-2">
-                        "{stats.highest_error_question.question_text}"
-                      </p>
-                      <p className="text-sm mt-2 text-red-700 font-bold">
-                        {stats.highest_error_question.error_rate}% error
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-500">No question data</p>
-                  )}
                 </div>
-              </div>
+
+                {stats.topic_breakdown?.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Error Rate by Topic</h3>
+                    <div className="space-y-2">
+                      {[...stats.topic_breakdown]
+                        .sort((a, b) => b.error_rate - a.error_rate)
+                        .map(t => (
+                          <div key={t.topic} className="flex items-center gap-3">
+                            <span className="text-sm text-gray-600 w-40 truncate shrink-0" title={t.topic}>
+                              {t.topic}
+                            </span>
+                            <div className="flex-1 bg-gray-100 rounded-full h-2.5">
+                              <div
+                                className={`h-2.5 rounded-full ${
+                                  t.error_rate >= 60 ? 'bg-red-500' :
+                                  t.error_rate >= 30 ? 'bg-yellow-400' : 'bg-green-400'
+                                }`}
+                                style={{ width: `${t.error_rate}%` }}
+                              />
+                            </div>
+                            <span className={`text-sm font-medium w-12 text-right ${
+                              t.error_rate >= 60 ? 'text-red-600' :
+                              t.error_rate >= 30 ? 'text-yellow-600' : 'text-green-600'
+                            }`}>
+                              {t.error_rate}%
+                            </span>
+                            <span className="text-xs text-gray-400 w-20 text-right">
+                              {t.incorrect}/{t.total} wrong
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : stats && !stats.data_available ? (
               <div className="text-center py-6 text-gray-500">No analytics data available for this selection.</div>
             ) : null}

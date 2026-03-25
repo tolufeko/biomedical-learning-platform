@@ -162,7 +162,7 @@ export async function GET(request: Request) {
 
     filteredData.forEach(record => {
       const qId = record.question_assignments?.question_id;
-      const topic = record.question_assignments?.questions?.topic || 'Uncategorised';
+      const topic = record.question_assignments?.questions?.question_topic || 'Uncategorised';
       if (!qId) return;
 
       if (!questionStats[qId]) questionStats[qId] = { total: 0, incorrect: 0 };
