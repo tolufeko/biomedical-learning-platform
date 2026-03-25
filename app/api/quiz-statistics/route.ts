@@ -1,213 +1,166 @@
-// app/api/quiz-statistics/route.ts
 import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/getServerUser';
-import { getUserRole, canAccessUserData } from '@/lib/auth/permissions';
+import { getUserRole } from '@/lib/auth/permissions';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
 const supabaseAdmin = supabaseServer();
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const currentUser = await getServerUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
-    }
+    const user = await getServerUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user_id');
-    const username = searchParams.get('username');
-    const quizId = searchParams.get('quiz_id');
-    const moduleId = searchParams.get('module');
+    const role = await getUserRole(user.id);
+    const isPrivileged = role === 'teacher' || role === 'admin';
 
-    const currentUserRole = await getUserRole(currentUser.id);
+    let query = supabaseAdmin
+      .from('analytics')
+      .select(`
+        user_id, correct, time_spent,
+        question_assignments (
+          quiz_id, question_id,
+          questions ( id, question_text, question_topic ),
+          quiz: quiz_id ( title, module )
+        )
+      `);
 
-    // Resolve username to user_id if needed
-    let resolvedUserId = userId;
-    if (username) {
-      const { data: profileData, error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('username', username)
-        .single();
+    if (!isPrivileged) query = query.eq('user_id', user.id);
 
-      if (profileError) {
-        if (profileError.code === 'PGRST116') {
-          return NextResponse.json({
-            average_score: 0, average_time_spent: 0,
-            highest_error_question: null, total_attempts: 0, data_available: false
-          });
-        }
-        throw profileError;
-      }
-      resolvedUserId = profileData.id;
-    }
+    const { data, error } = await query;
+    if (error) throw error;
 
-    // Verify access to target user's data
-    if (resolvedUserId) {
-      const userAccess = await canAccessUserData(currentUser.id, resolvedUserId);
-      if (!userAccess.allowed) {
-        return NextResponse.json(
-          { error: 'Forbidden: You do not have permission to view this user\'s statistics', reason: userAccess.reason },
-          { status: 403 }
-        );
-      }
-    }
+    const records = (data || []).filter(r => r.question_assignments);
 
-    // Students always scoped to themselves
-    if (['student', 'guest'].includes(currentUserRole ?? '') && !resolvedUserId) {
-      resolvedUserId = currentUser.id;
-    }
-
-    // Fetch analytics data
-    let analyticsData: any[] = [];
-    const analyticsSelect = `
-      *,
-      question_assignments (
-        id, quiz_id, question_id, display_order,
-        questions (id, question_text, question_type, question_topic, question_feedback)
-      )
-    `;
-
-    if (quizId) {
-      const { data: assignments, error: assignmentsError } = await supabaseAdmin
-        .from('question_assignments')
-        .select('id')
-        .eq('quiz_id', quizId);
-
-      if (assignmentsError) throw assignmentsError;
-
-      if (assignments && assignments.length > 0) {
-        let query = supabaseAdmin
-          .from('analytics')
-          .select(analyticsSelect)
-          .in('question_assignment_id', assignments.map(a => a.id));
-
-        if (resolvedUserId) query = query.eq('user_id', resolvedUserId);
-
-        const { data, error } = await query;
-        if (error) throw error;
-        analyticsData = data || [];
-      }
-    } else if (moduleId) {
-      const { data: moduleQuizzes, error: moduleError } = await supabaseAdmin
-        .from('quiz')
-        .select('id')
-        .eq('module', moduleId);
-    
-      if (moduleError) throw moduleError;
-    
-      if (!moduleQuizzes || moduleQuizzes.length === 0) {
-        return NextResponse.json({
-          average_score: 0, average_time_spent: 0,
-          highest_error_question: null, total_attempts: 0, data_available: false
-        });
-      }
-    
-      const { data: assignments, error: assignmentsError } = await supabaseAdmin
-        .from('question_assignments')
-        .select('id')
-        .in('quiz_id', moduleQuizzes.map(q => q.id));
-    
-      if (assignmentsError) throw assignmentsError;
-    
-      if (!assignments || assignments.length === 0) {
-        return NextResponse.json({
-          average_score: 0, average_time_spent: 0,
-          highest_error_question: null, total_attempts: 0, data_available: false
-        });
-      }
-    
-      let query = supabaseAdmin
-        .from('analytics')
-        .select(analyticsSelect)
-        .in('question_assignment_id', assignments.map(a => a.id));
-    
-      if (resolvedUserId) query = query.eq('user_id', resolvedUserId);
-    
-      const { data, error } = await query;
-      if (error) throw error;
-      analyticsData = data || [];
-    } else {
-      let query = supabaseAdmin.from('analytics').select(analyticsSelect);
-      if (resolvedUserId) query = query.eq('user_id', resolvedUserId);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      analyticsData = data || [];
-    }
-
-    const filteredData = analyticsData.filter(r => r.question_assignments?.questions?.question_text);
-
-    if (filteredData.length === 0) {
-      return NextResponse.json({
-        average_score: 0, average_time_spent: 0,
-        highest_error_question: null, total_attempts: 0, data_available: false
-      });
-    }
-
-    // Compute stats
-    const questionTextMap: Record<string, string> = {};
-    filteredData.forEach(record => {
-      const qId = record.question_assignments?.question_id;
-      const qText = record.question_assignments?.questions?.question_text;
-      if (qId && qText && !questionTextMap[qId]) questionTextMap[qId] = qText;
+    // ── By Quiz ───────────────────────────────────────────────────────────
+    const quizMap: Record<string, { title: string; total: number; correct: number; incorrect: number; time: number }> = {};
+    records.forEach(r => {
+      const qa = r.question_assignments as any;
+      const quizId = qa?.quiz_id;
+      const title = qa?.quiz?.title || 'Unknown';
+      if (!quizId) return;
+      if (!quizMap[quizId]) quizMap[quizId] = { title, total: 0, correct: 0, incorrect: 0, time: 0 };
+      quizMap[quizId].total++;
+      if (r.correct) quizMap[quizId].correct++;
+      else quizMap[quizId].incorrect++;
+      quizMap[quizId].time += r.time_spent || 0;
     });
 
-    const correctCount = filteredData.filter(r => r.correct).length;
-    const averageScore = (correctCount / filteredData.length) * 100;
-    const averageTime = filteredData.reduce((sum, r) => sum + (r.time_spent || 0), 0) / filteredData.length;
+    const by_quiz = Object.entries(quizMap).map(([quiz_id, s]) => ({
+      quiz_id,
+      title: s.title,
+      average_score: parseFloat(((s.correct / s.total) * 100).toFixed(1)),
+      error_rate: s.total > 0 ? parseFloat(((s.incorrect / s.total) * 100).toFixed(1)) : 0,
+      correct: s.correct,
+      incorrect: s.incorrect,
+      total_attempts: s.total,
+      avg_time: s.total > 0 ? Math.round(s.time / s.total) : 0,
+    }));
 
-    const questionStats: Record<string, { total: number; incorrect: number }> = {};
-    const topicStats: Record<string, { total: number; incorrect: number }> = {};
+    // ── By Module ─────────────────────────────────────────────────────────
+    const moduleMap: Record<string, { total: number; correct: number; incorrect: number; time: number }> = {};
+    records.forEach(r => {
+      const qa = r.question_assignments as any;
+      const module = qa?.quiz?.module || 'Unknown';
+      if (!moduleMap[module]) moduleMap[module] = { total: 0, correct: 0, incorrect: 0, time: 0 };
+      moduleMap[module].total++;
+      if (r.correct) moduleMap[module].correct++;
+      else moduleMap[module].incorrect++;
+      moduleMap[module].time += r.time_spent ?? 0;
+    });
 
-    filteredData.forEach(record => {
-      const qId = record.question_assignments?.question_id;
-      const topic = record.question_assignments?.questions?.question_topic || 'Uncategorised';
+    const by_module = Object.entries(moduleMap).map(([module, s]) => ({
+      module,
+      average_score: parseFloat(((s.correct / s.total) * 100).toFixed(1)),
+      error_rate: s.total > 0 ? parseFloat(((s.incorrect / s.total) * 100).toFixed(1)) : 0,
+      correct: s.correct,
+      incorrect: s.incorrect,
+      total_attempts: s.total,
+      avg_time: s.total > 0 ? Math.round(s.time / s.total) : 0,
+    }));
+
+    // ── By Topic ──────────────────────────────────────────────────────────
+    const topicMap: Record<string, { total: number; correct: number; incorrect: number; time: number }> = {};
+    records.forEach(r => {
+      const qa = r.question_assignments as any;
+      const topic = qa?.questions?.question_topic || 'Uncategorised';
+      if (!topicMap[topic]) topicMap[topic] = { total: 0, correct: 0, incorrect: 0, time: 0 };
+      topicMap[topic].total++;
+      if (r.correct) topicMap[topic].correct++;
+      else topicMap[topic].incorrect++;
+      topicMap[topic].time += r.time_spent ?? 0;
+    });
+
+    const by_topic = Object.entries(topicMap).map(([topic, s]) => ({
+      topic,
+      average_score: parseFloat(((s.correct / s.total) * 100).toFixed(1)),
+      error_rate: s.total > 0 ? parseFloat(((s.incorrect / s.total) * 100).toFixed(1)) : 0,
+      correct: s.correct,
+      incorrect: s.incorrect,
+      total_attempts: s.total,
+      avg_time: s.total > 0 ? Math.round(s.time / s.total) : 0,
+    }));
+
+    // ── By Question ───────────────────────────────────────────────────────
+    const questionMap: Record<string, { text: string; total: number; correct: number; incorrect: number; time: number }> = {};
+    records.forEach(r => {
+      const qa = r.question_assignments as any;
+      const qId = qa?.questions?.id;
+      const text = qa?.questions?.question_text || 'Unknown';
       if (!qId) return;
-
-      if (!questionStats[qId]) questionStats[qId] = { total: 0, incorrect: 0 };
-      questionStats[qId].total++;
-      if (!record.correct) questionStats[qId].incorrect++;
-
-      if (!topicStats[topic]) topicStats[topic] = { total: 0, incorrect: 0 };
-      topicStats[topic].total++;
-      if (!record.correct) topicStats[topic].incorrect++;
+      if (!questionMap[qId]) questionMap[qId] = { text, total: 0, correct: 0, incorrect: 0, time: 0 };
+      questionMap[qId].total++;
+      if (r.correct) questionMap[qId].correct++;
+      else questionMap[qId].incorrect++;
+      questionMap[qId].time += r.time_spent ?? 0;
     });
 
-    let highestErrorQuestion = null;
-    let highestErrorRate = -1;
+    const by_question = Object.entries(questionMap).map(([question_id, s]) => ({
+      question_id,
+      text: s.text,
+      average_score: parseFloat(((s.correct / s.total) * 100).toFixed(1)),
+      error_rate: s.total > 0 ? parseFloat(((s.incorrect / s.total) * 100).toFixed(1)) : 0,
+      correct: s.correct,
+      incorrect: s.incorrect,
+      total_attempts: s.total,
+      avg_time: s.total > 0 ? Math.round(s.time / s.total) : 0,
+    }));
 
-    for (const [questionId, stats] of Object.entries(questionStats)) {
-      const errorRate = (stats.incorrect / stats.total) * 100;
-      if (errorRate > highestErrorRate) {
-        highestErrorRate = errorRate;
-        highestErrorQuestion = {
-          question_id: questionId,
-          question_text: questionTextMap[questionId] || 'Unknown question',
-          error_rate: parseFloat(errorRate.toFixed(1)),
-          total_attempts: stats.total,
-          incorrect_attempts: stats.incorrect,
-        };
-      }
+    // ── By Student (privileged only) ──────────────────────────────────────
+    let by_student: any[] = [];
+    if (isPrivileged) {
+      const studentMap: Record<string, { total: number; correct: number; incorrect: number; time: number }> = {};
+      records.forEach(r => {
+        if (!studentMap[r.user_id]) studentMap[r.user_id] = { total: 0, correct: 0, incorrect: 0, time: 0 };
+        studentMap[r.user_id].total++;
+        if (r.correct) studentMap[r.user_id].correct++;
+        else studentMap[r.user_id].incorrect++;
+        studentMap[r.user_id].time += r.time_spent ?? 0;
+      });
+
+      const userIds = Object.keys(studentMap);
+      const { data: profiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, username')
+        .in('id', userIds);
+
+      const usernameMap = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
+
+      by_student = Object.entries(studentMap).map(([user_id, s]) => ({
+        user_id,
+        username: usernameMap[user_id] || user_id,
+        average_score: parseFloat(((s.correct / s.total) * 100).toFixed(1)),
+        error_rate: s.total > 0 ? parseFloat(((s.incorrect / s.total) * 100).toFixed(1)) : 0,
+        correct: s.correct,
+        incorrect: s.incorrect,
+        total_attempts: s.total,
+        avg_time: s.total > 0 ? Math.round(s.time / s.total) : 0,
+      }));
     }
 
-    return NextResponse.json({
-      average_score: parseFloat(averageScore.toFixed(1)),
-      average_time_spent: Math.round(averageTime),
-      highest_error_question: highestErrorQuestion,
-      total_attempts: filteredData.length,
-      data_available: true,
-      topic_breakdown: Object.entries(topicStats).map(([topic, stats]) => ({
-        topic,
-        total: stats.total,
-        correct: stats.total - stats.incorrect,
-        incorrect: stats.incorrect,
-        error_rate: parseFloat(((stats.incorrect / stats.total) * 100).toFixed(1)),
-      })),
-    });
+    return NextResponse.json({ by_quiz, by_module, by_topic, by_question, by_student });
 
   } catch (error: any) {
-    console.error('🐞 Quiz stats API error:', error);
-    return NextResponse.json({ error: 'Failed to fetch statistics', details: error.message }, { status: 500 });
+    console.error('Quiz statistics API error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

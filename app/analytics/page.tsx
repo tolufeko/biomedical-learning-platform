@@ -1,107 +1,328 @@
-// app/analytics/page.tsx
 'use client';
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
+} from 'recharts';
 
-interface HotspotAnswer { x: number; y: number; }
-interface QuizQuestion {
-  id: string; question_type: string; question_text: string; options: string[];
-  correct_answer: string | string[] | HotspotAnswer[]; display_order: number;
-  image_path?: string; image_url?: string;
-}
-interface Quiz {
-  id: string; title: string; description?: string; questions: QuizQuestion[];
-  created_at: string; updated_at: string; user_id: string; module: string;
-}
-interface HardestQuestion {
-  question_id: string; question_text: string; error_rate: number;
-  total_attempts: number; incorrect_attempts: number;
-}
-interface TopicStat {
-  topic: string;
-  total: number;
+// ── Types ──────────────────────────────────────────────────────────────────
+interface StatEntry {
+  average_score: number;
+  error_rate: number;
   correct: number;
   incorrect: number;
-  error_rate: number;
+  total_attempts: number;
+  avg_time: number;
 }
-interface QuizStatistics {
-  average_score: number; average_time_spent: number;
-  highest_error_question: HardestQuestion | null;
-  total_attempts: number; data_available: boolean;
-  topic_breakdown: TopicStat[];
+interface QuizEntry extends StatEntry { quiz_id: string; title: string; }
+interface ModuleEntry extends StatEntry { module: string; }
+interface TopicEntry extends StatEntry { topic: string; }
+interface QuestionEntry extends StatEntry { question_id: string; text: string; }
+interface StudentEntry extends StatEntry { user_id: string; username: string; }
+
+interface AnalyticsData {
+  by_quiz: QuizEntry[];
+  by_module: ModuleEntry[];
+  by_topic: TopicEntry[];
+  by_question: QuestionEntry[];
+  by_student: StudentEntry[];
 }
 
+type SortKey = 'average_score' | 'error_rate' | 'total_attempts' | 'avg_time';
+type SortDir = 'asc' | 'desc';
+
 const ALL_VIEW_MODES = [
-  { key: 'general', label: 'All Students & Quizzes' },
-  { key: 'quiz',    label: 'Specific Quiz' },
-  { key: 'module',  label: 'Specific Module' },
-  { key: 'student', label: 'Specific Student' },
+  { key: 'quiz',     label: 'By Quiz' },
+  { key: 'module',   label: 'By Module' },
+  { key: 'topic',    label: 'By Topic' },
+  { key: 'question', label: 'By Question' },
+  { key: 'student',  label: 'By Student' },
 ] as const;
 
 const STUDENT_VIEW_MODES = [
-  { key: 'general', label: 'My Overall Stats' },
-  { key: 'quiz',    label: 'Specific Quiz' },
-  { key: 'module',  label: 'Specific Module' },
+  { key: 'quiz',     label: 'By Quiz' },
+  { key: 'module',   label: 'By Module' },
+  { key: 'topic',    label: 'By Topic' },
+  { key: 'question', label: 'By Question' },
 ] as const;
 
-type ViewMode = 'general' | 'quiz' | 'module' | 'student';
+type ViewMode = 'quiz' | 'module' | 'topic' | 'question' | 'student';
 
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'average_score',  label: 'Avg Score' },
+  { key: 'error_rate',     label: 'Error Rate' },
+  { key: 'total_attempts', label: 'Attempts' },
+  { key: 'avg_time',       label: 'Avg Time' },
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function applyFilterAndSort(
+  data: any[], xKey: string, search: string,
+  sortKey: SortKey, sortDir: SortDir,
+): any[] {
+  return [...data]
+    .filter(d => String(d[xKey]).toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => sortDir === 'asc' ? a[sortKey] - b[sortKey] : b[sortKey] - a[sortKey]);
+}
+
+// ── Subcomponents ──────────────────────────────────────────────────────────
+function ChartControls({
+  search, onSearch, sortKey, onSortKey, sortDir, onSortDir,
+}: {
+  search: string; onSearch: (v: string) => void;
+  sortKey: SortKey; onSortKey: (k: SortKey) => void;
+  sortDir: SortDir; onSortDir: (d: SortDir) => void;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <input
+        type="text"
+        placeholder="Filter..."
+        value={search}
+        onChange={e => onSearch(e.target.value)}
+        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <div className="flex gap-2 flex-wrap">
+        {SORT_OPTIONS.map(opt => (
+          <button
+            key={opt.key}
+            onClick={() => {
+              if (sortKey === opt.key) onSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+              else { onSortKey(opt.key); onSortDir('desc'); }
+            }}
+            className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
+              sortKey === opt.key
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+            }`}
+          >
+            {opt.label} {sortKey === opt.key ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScrollableBarChart({
+  data, xKey, dataKey, title, color, tickFormatter, tooltipFormatter,
+}: {
+  data: any[]; xKey: string; dataKey: string; title: string; color: string;
+  tickFormatter?: (v: any) => string; tooltipFormatter?: (v: any) => string;
+}) {
+  const minWidth = Math.max(500, data.length * 70);
+
+  if (!data.length) return (
+    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">{title}</h3>
+      <p className="text-center text-gray-400 py-8 text-sm">No data</p>
+    </div>
+  );
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">{title}</h3>
+      <div className="overflow-x-auto">
+        <div style={{ minWidth }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 64 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey={xKey}
+                tick={{ fontSize: 11 }}
+                angle={-35}
+                textAnchor="end"
+                interval={0}
+                tickFormatter={v => String(v).length > 18 ? `${String(v).slice(0, 18)}…` : String(v)}
+              />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={tickFormatter} />
+              <Tooltip formatter={(value) => [tooltipFormatter ? tooltipFormatter(value) : value, title]} />
+              <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScrollableAttemptsChart({ data, xKey }: { data: any[]; xKey: string }) {
+  const minWidth = Math.max(500, data.length * 70);
+
+  if (!data.length) return (
+    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">Total Attempts</h3>
+      <p className="text-center text-gray-400 py-8 text-sm">No data</p>
+    </div>
+  );
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Total Attempts (Correct vs Incorrect)</h3>
+      <div className="overflow-x-auto">
+        <div style={{ minWidth }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 64 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey={xKey}
+                tick={{ fontSize: 11 }}
+                angle={-35}
+                textAnchor="end"
+                interval={0}
+                tickFormatter={v => String(v).length > 18 ? `${String(v).slice(0, 18)}…` : String(v)}
+              />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip
+                labelFormatter={(label, payload) => {
+                  if (!payload || payload.length === 0) return label;
+
+                  const data = payload[0].payload;
+                  const total = data.correct + data.incorrect;
+
+                  return `${label} • Total: ${total}`;
+                }}
+                formatter={(value, name) => {
+                  return [value, name];
+                }}
+              />
+              <Bar dataKey="correct" stackId="a" fill="#22c55e" name="Correct" />
+              <Bar dataKey="incorrect" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} name="Incorrect" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChartGroup({
+  data, xKey, search, onSearch, sortKey, onSortKey, sortDir, onSortDir,
+}: {
+  data: any[]; xKey: string;
+  search: string; onSearch: (v: string) => void;
+  sortKey: SortKey; onSortKey: (k: SortKey) => void;
+  sortDir: SortDir; onSortDir: (d: SortDir) => void;
+}) {
+  const filtered = applyFilterAndSort(data, xKey, search, sortKey, sortDir);
+
+  return (
+    <div>
+      <ChartControls
+        search={search} onSearch={onSearch}
+        sortKey={sortKey} onSortKey={onSortKey}
+        sortDir={sortDir} onSortDir={onSortDir}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <ScrollableBarChart
+          data={filtered} xKey={xKey} dataKey="average_score"
+          title="Average Score" color="#3b82f6"
+          tickFormatter={v => `${v}%`} tooltipFormatter={v => `${v}%`}
+        />
+        <ScrollableAttemptsChart data={filtered} xKey={xKey} />
+        <ScrollableBarChart
+          data={filtered} xKey={xKey} dataKey="avg_time"
+          title="Avg. Time (sec)" color="#10b981"
+          tooltipFormatter={v => `${v}s`}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Per-group state hook ───────────────────────────────────────────────────
+function useGroupState() {
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('average_score');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  return { search, setSearch, sortKey, setSortKey, sortDir, setSortDir };
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const router = useRouter();
   const { user, role } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<QuizStatistics | null>(null);
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('general');
-  const [selectedQuizId, setSelectedQuizId] = useState('');
-  const [selectedModule, setSelectedModule] = useState('');
-  const [selectedUserName, setSelectedUserName] = useState('');
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('quiz');
+  const [loading, setLoading] = useState(false);
+
+  const quiz     = useGroupState();
+  const module   = useGroupState();
+  const topic    = useGroupState();
+  const question = useGroupState();
+  const student  = useGroupState();
 
   const isPrivileged = role === 'teacher' || role === 'admin';
   const viewModes = isPrivileged ? ALL_VIEW_MODES : STUDENT_VIEW_MODES;
 
-  // Derive unique modules from quizzes
-  const modules = Array.from(new Set(quizzes.map(q => q.module).filter(Boolean))).sort();
-
-  useEffect(() => {
-    fetch('/api/quizzes')
-      .then(r => r.json())
-      .then(setQuizzes)
-      .catch(() => setError('Failed to load quizzes'));
-  }, []);
-
   useEffect(() => {
     if (!user) router.push("/");
-  }, [user, role, router]);
+  }, [user, router]);
 
   useEffect(() => {
-    if (!isPrivileged && viewMode === 'student') setViewMode('general');
+    if (!isPrivileged && viewMode === 'student') setViewMode('quiz');
   }, [role]);
 
-  const fetchStatistics = async () => {
-    setAnalyticsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (viewMode === 'quiz' && selectedQuizId) params.append('quiz_id', selectedQuizId);
-      if (viewMode === 'module' && selectedModule) params.append('module', selectedModule);
-      if (isPrivileged && viewMode === 'student' && selectedUserName) params.append('username', selectedUserName);
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    fetch('/api/quiz-statistics')
+      .then(r => r.json())
+      .then(setData)
+      .catch(() => setError('Failed to load analytics'))
+      .finally(() => setLoading(false));
+  }, [user]);
 
-      const res = await fetch(`/api/quiz-statistics${params.toString() ? `?${params}` : ''}`);
-      setStats(await res.json());
-    } catch {
-      setError('Failed to load statistics');
-      setStats(null);
-    } finally {
-      setAnalyticsLoading(false);
-    }
+  const renderContent = () => {
+    if (loading) return <div className="text-center py-12 text-gray-500">Loading analytics...</div>;
+    if (!data) return null;
+
+    const groups: Record<ViewMode, React.ReactNode> = {
+      quiz: (
+        <ChartGroup data={data.by_quiz} xKey="title"
+          search={quiz.search} onSearch={quiz.setSearch}
+          sortKey={quiz.sortKey} onSortKey={quiz.setSortKey}
+          sortDir={quiz.sortDir} onSortDir={quiz.setSortDir}
+        />
+      ),
+      module: (
+        <ChartGroup data={data.by_module} xKey="module"
+          search={module.search} onSearch={module.setSearch}
+          sortKey={module.sortKey} onSortKey={module.setSortKey}
+          sortDir={module.sortDir} onSortDir={module.setSortDir}
+        />
+      ),
+      topic: (
+        <ChartGroup data={data.by_topic} xKey="topic"
+          search={topic.search} onSearch={topic.setSearch}
+          sortKey={topic.sortKey} onSortKey={topic.setSortKey}
+          sortDir={topic.sortDir} onSortDir={topic.setSortDir}
+        />
+      ),
+      question: (
+        <ChartGroup data={data.by_question} xKey="text"
+          search={question.search} onSearch={question.setSearch}
+          sortKey={question.sortKey} onSortKey={question.setSortKey}
+          sortDir={question.sortDir} onSortDir={question.setSortDir}
+        />
+      ),
+      student: isPrivileged ? (
+        <ChartGroup data={data.by_student} xKey="username"
+          search={student.search} onSearch={student.setSearch}
+          sortKey={student.sortKey} onSortKey={student.setSortKey}
+          sortDir={student.sortDir} onSortDir={student.setSortDir}
+        />
+      ) : null,
+    };
+
+    return groups[viewMode] ?? null;
   };
-
-  useEffect(() => { fetchStatistics(); }, [role, viewMode, selectedQuizId, selectedModule, selectedUserName]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -122,12 +343,12 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        <div className="flex border-b border-gray-200 mb-6">
+        <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
           {viewModes.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setViewMode(key as ViewMode)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 viewMode === key
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -140,117 +361,7 @@ export default function AnalyticsPage() {
 
         <Card>
           <CardContent className="pt-6">
-            {viewMode === 'quiz' && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Quiz</label>
-                <select
-                  value={selectedQuizId}
-                  onChange={(e) => setSelectedQuizId(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">-- Choose a quiz --</option>
-                  {quizzes.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
-                </select>
-              </div>
-            )}
-
-            {viewMode === 'module' && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Module</label>
-                <select
-                  value={selectedModule}
-                  onChange={(e) => setSelectedModule(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">-- Choose a module --</option>
-                  {modules.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-            )}
-
-            {isPrivileged && viewMode === 'student' && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Student Username</label>
-                <input
-                  type="text"
-                  value={selectedUserName}
-                  onChange={(e) => setSelectedUserName(e.target.value.trim())}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter the student's username (not user ID)</p>
-              </div>
-            )}
-
-            {analyticsLoading ? (
-              <div className="text-center py-6 text-gray-600">Loading analytics...</div>
-            ) : stats?.data_available ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  {[
-                    { label: 'Avg. Score',      value: `${stats.average_score}%`, color: 'blue' },
-                    { label: 'Avg. Time (sec)', value: stats.average_time_spent,   color: 'green' },
-                    { label: 'Total Attempts',  value: stats.total_attempts,       color: 'purple' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className={`bg-${color}-50 p-4 rounded-lg text-center`}>
-                      <p className="text-sm text-gray-600">{label}</p>
-                      <p className={`text-2xl font-bold text-${color}-700`}>{value}</p>
-                    </div>
-                  ))}
-                  <div className="bg-red-50 p-4 rounded-lg text-center">
-                    {stats.highest_error_question ? (
-                      <>
-                        <p className="text-sm text-gray-600">Hardest Question</p>
-                        <p className="text-xs font-medium text-gray-800 mt-1 line-clamp-2">
-                          "{stats.highest_error_question.question_text}"
-                        </p>
-                        <p className="text-sm mt-2 text-red-700 font-bold">
-                          {stats.highest_error_question.error_rate}% error
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-gray-500">No question data</p>
-                    )}
-                  </div>
-                </div>
-
-                {stats.topic_breakdown?.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Error Rate by Topic</h3>
-                    <div className="space-y-2">
-                      {[...stats.topic_breakdown]
-                        .sort((a, b) => b.error_rate - a.error_rate)
-                        .map(t => (
-                          <div key={t.topic} className="flex items-center gap-3">
-                            <span className="text-sm text-gray-600 w-40 truncate shrink-0" title={t.topic}>
-                              {t.topic}
-                            </span>
-                            <div className="flex-1 bg-gray-100 rounded-full h-2.5">
-                              <div
-                                className={`h-2.5 rounded-full ${
-                                  t.error_rate >= 60 ? 'bg-red-500' :
-                                  t.error_rate >= 30 ? 'bg-yellow-400' : 'bg-green-400'
-                                }`}
-                                style={{ width: `${t.error_rate}%` }}
-                              />
-                            </div>
-                            <span className={`text-sm font-medium w-12 text-right ${
-                              t.error_rate >= 60 ? 'text-red-600' :
-                              t.error_rate >= 30 ? 'text-yellow-600' : 'text-green-600'
-                            }`}>
-                              {t.error_rate}%
-                            </span>
-                            <span className="text-xs text-gray-400 w-20 text-right">
-                              {t.incorrect}/{t.total} wrong
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : stats && !stats.data_available ? (
-              <div className="text-center py-6 text-gray-500">No analytics data available for this selection.</div>
-            ) : null}
+            {renderContent()}
           </CardContent>
         </Card>
       </div>
