@@ -184,10 +184,17 @@ function ScrollableAttemptsChart({ data, xKey }: { data: any[]; xKey: string }) 
                   const data = payload[0].payload;
                   const total = data.correct + data.incorrect;
 
-                  return `${label} • Total: ${total}`;
+                  return `${label}: Total: ${total}`;
                 }}
-                formatter={(value, name) => {
-                  return [value, name];
+                formatter={(value, name, props) => {
+                  const data = props.payload;
+                  const total = data.correct + data.incorrect;
+
+                  const percent = total > 0
+                    ? ((value as number / total) * 100).toFixed(1)
+                    : 0;
+
+                  return [`${value} (${percent}%)`, name];
                 }}
               />
               <Bar dataKey="correct" stackId="a" fill="#22c55e" name="Correct" />
