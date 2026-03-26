@@ -591,7 +591,7 @@ export default function QuizPage() {
     if (!user || role === 'guest') return;
     if (!questionAssignmentId) { console.warn('Missing question_assignment_id'); return; }
     try {
-      await fetch('/api/quiz-analytics', {
+      await fetch('/api/quiz-statistics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question_assignment_id: questionAssignmentId, correct: isCorrect, time_spent: Math.round(timeSpent / 1000) }),
