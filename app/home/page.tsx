@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { ArrowLeft } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 interface Quiz {
   id: string;
@@ -18,15 +19,22 @@ interface Quiz {
 export default function HomePage() {
   const router = useRouter();
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+
+  const selectedModule = searchParams.get('module');
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedModule, setSelectedModule] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) router.push("/");
   }, [user, router]);
+
+  // Clear search when module changes
+  useEffect(() => {
+    setSearchTerm("");
+  }, [selectedModule]);
 
   useEffect(() => {
     const fetchQuizzes = async () => {
@@ -45,12 +53,10 @@ export default function HomePage() {
     fetchQuizzes();
   }, []);
 
-  // Get unique modules
   const modules = Array.from(
     new Set(quizzes.map(q => q.module).filter(Boolean))
   ).sort();
 
-  // Quizzes in the selected module, filtered by search
   const quizzesInModule = quizzes.filter(quiz =>
     quiz.module === selectedModule &&
     (
@@ -69,7 +75,7 @@ export default function HomePage() {
         <h2 className="text-3xl font-semibold mb-2 text-gray-800">
           Biomedical Learning Hub
         </h2>
-        {/* ── Module list view ── */}
+
         {!selectedModule ? (
           <>
             <p className="text-gray-600 mb-6 text-center">
@@ -93,7 +99,7 @@ export default function HomePage() {
                   <Card
                     key={module}
                     className="hover:shadow-lg transition cursor-pointer border-2 border-transparent hover:border-blue-200"
-                    onClick={() => { setSelectedModule(module); setSearchTerm(""); }}
+                    onClick={() => router.push(`/home?module=${encodeURIComponent(module)}`)}
                   >
                     <CardHeader>
                       <CardTitle className="text-lg flex justify-between items-start">
@@ -121,21 +127,15 @@ export default function HomePage() {
             )}
           </>
         ) : (
-
-        /* ── Quiz list view for selected module ── */
           <>
             <div className="w-full max-w-6xl mb-6 flex flex-col items-center relative">
-              {/* Text Stack */}
               <div className="text-center">
-                <p className="text-gray-600 mb-1">
-                  Select a quiz to begin revising.
-                </p>
+                <p className="text-gray-600 mb-1">Select a quiz to begin revising.</p>
                 <p className="text-xs font-medium uppercase tracking-widest text-gray-600 mb-2">
                   Module name: {selectedModule}
                 </p>
               </div>
 
-              {/* Searchbar */}
               <input
                 type="text"
                 placeholder="Search quizzes..."
@@ -144,9 +144,8 @@ export default function HomePage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
 
-              {/* Back Button */}
               <button
-                onClick={() => { setSelectedModule(null); setSearchTerm(""); }}
+                onClick={() => router.push('/home')}
                 className="absolute left-0 p-2 text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded-full transition-colors"
                 aria-label="Back to Modules"
               >

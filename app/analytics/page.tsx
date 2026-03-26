@@ -1,3 +1,4 @@
+// app/analytics/page.tsx
 'use client';
 
 import { useRouter } from "next/navigation";
@@ -36,18 +37,18 @@ type SortKey = 'average_score' | 'error_rate' | 'total_attempts' | 'avg_time';
 type SortDir = 'asc' | 'desc';
 
 const ALL_VIEW_MODES = [
-  { key: 'quiz',     label: 'By Quiz' },
-  { key: 'module',   label: 'By Module' },
-  { key: 'topic',    label: 'By Topic' },
-  { key: 'question', label: 'By Question' },
-  { key: 'student',  label: 'By Student' },
+  { key: 'module',   label: 'Sort By Module' },
+  { key: 'quiz',     label: 'Sort By Quiz' },
+  { key: 'topic',    label: 'Sort By Topic' },
+  { key: 'question', label: 'Sort By Question' },
+  { key: 'student',  label: 'Sort By Student' },
 ] as const;
 
 const STUDENT_VIEW_MODES = [
-  { key: 'quiz',     label: 'By Quiz' },
-  { key: 'module',   label: 'By Module' },
-  { key: 'topic',    label: 'By Topic' },
-  { key: 'question', label: 'By Question' },
+  { key: 'module',   label: 'Sort By Module' },
+  { key: 'quiz',     label: 'Sort By Quiz' },
+  { key: 'topic',    label: 'Sort By Topic' },
+  { key: 'question', label: 'Sort By Question' },
 ] as const;
 
 type ViewMode = 'quiz' | 'module' | 'topic' | 'question' | 'student';
@@ -109,10 +110,11 @@ function ChartControls({
 }
 
 function ScrollableBarChart({
-  data, xKey, dataKey, title, color, tickFormatter, tooltipFormatter,
+  data, xKey, dataKey, title, color, tickFormatter, tooltipFormatter, onBarClick,
 }: {
   data: any[]; xKey: string; dataKey: string; title: string; color: string;
   tickFormatter?: (v: any) => string; tooltipFormatter?: (v: any) => string;
+  onBarClick?: (entry: any) => void;
 }) {
   const minWidth = Math.max(500, data.length * 70);
 
@@ -129,7 +131,11 @@ function ScrollableBarChart({
       <div className="overflow-x-auto">
         <div style={{ minWidth }}>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 64 }}>
+            <BarChart
+              data={data}
+              margin={{ top: 4, right: 16, left: 0, bottom: 64 }}
+              style={{ cursor: onBarClick ? 'pointer' : 'default' }}
+            >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey={xKey}
@@ -141,7 +147,12 @@ function ScrollableBarChart({
               />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={tickFormatter} />
               <Tooltip formatter={(value) => [tooltipFormatter ? tooltipFormatter(value) : value, title]} />
-              <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} />
+              <Bar
+                dataKey={dataKey}
+                fill={color}
+                radius={[4, 4, 0, 0]}
+                onClick={onBarClick ? (entry) => onBarClick(entry) : undefined}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -150,7 +161,9 @@ function ScrollableBarChart({
   );
 }
 
-function ScrollableAttemptsChart({ data, xKey }: { data: any[]; xKey: string }) {
+function ScrollableAttemptsChart({ data, xKey, onBarClick }: {
+  data: any[]; xKey: string; onBarClick?: (entry: any) => void;
+}) {
   const minWidth = Math.max(500, data.length * 70);
 
   if (!data.length) return (
@@ -166,7 +179,11 @@ function ScrollableAttemptsChart({ data, xKey }: { data: any[]; xKey: string }) 
       <div className="overflow-x-auto">
         <div style={{ minWidth }}>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 64 }}>
+            <BarChart
+              data={data}
+              margin={{ top: 4, right: 16, left: 0, bottom: 64 }}
+              style={{ cursor: onBarClick ? 'pointer' : 'default' }}
+            >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey={xKey}
@@ -179,26 +196,22 @@ function ScrollableAttemptsChart({ data, xKey }: { data: any[]; xKey: string }) 
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip
                 labelFormatter={(label, payload) => {
-                  if (!payload || payload.length === 0) return label;
-
-                  const data = payload[0].payload;
-                  const total = data.correct + data.incorrect;
-
-                  return `${label}: Total: ${total}`;
+                  if (!payload?.length) return label;
+                  const d = payload[0].payload;
+                  return `${label} — Total: ${d.correct + d.incorrect}`;
                 }}
                 formatter={(value, name, props) => {
-                  const data = props.payload;
-                  const total = data.correct + data.incorrect;
-
-                  const percent = total > 0
-                    ? ((value as number / total) * 100).toFixed(1)
-                    : 0;
-
+                  const d = props.payload;
+                  const total = d.correct + d.incorrect;
+                  const percent = total > 0 ? ((value as number / total) * 100).toFixed(1) : 0;
                   return [`${value} (${percent}%)`, name];
                 }}
               />
-              <Bar dataKey="correct" stackId="a" fill="#22c55e" name="Correct" />
-              <Bar dataKey="incorrect" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} name="Incorrect" />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              <Bar dataKey="correct" stackId="a" fill="#22c55e" name="Correct"
+                onClick={onBarClick ? (entry) => onBarClick(entry) : undefined} />
+              <Bar dataKey="incorrect" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} name="Incorrect"
+                onClick={onBarClick ? (entry) => onBarClick(entry) : undefined} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -208,12 +221,13 @@ function ScrollableAttemptsChart({ data, xKey }: { data: any[]; xKey: string }) 
 }
 
 function ChartGroup({
-  data, xKey, search, onSearch, sortKey, onSortKey, sortDir, onSortDir,
+  data, xKey, search, onSearch, sortKey, onSortKey, sortDir, onSortDir, onBarClick,
 }: {
   data: any[]; xKey: string;
   search: string; onSearch: (v: string) => void;
   sortKey: SortKey; onSortKey: (k: SortKey) => void;
   sortDir: SortDir; onSortDir: (d: SortDir) => void;
+  onBarClick?: (entry: any) => void;
 }) {
   const filtered = applyFilterAndSort(data, xKey, search, sortKey, sortDir);
 
@@ -229,12 +243,14 @@ function ChartGroup({
           data={filtered} xKey={xKey} dataKey="average_score"
           title="Average Score" color="#3b82f6"
           tickFormatter={v => `${v}%`} tooltipFormatter={v => `${v}%`}
+          onBarClick={onBarClick}
         />
-        <ScrollableAttemptsChart data={filtered} xKey={xKey} />
+        <ScrollableAttemptsChart data={filtered} xKey={xKey} onBarClick={onBarClick} />
         <ScrollableBarChart
           data={filtered} xKey={xKey} dataKey="avg_time"
           title="Avg. Time (sec)" color="#10b981"
           tooltipFormatter={v => `${v}s`}
+          onBarClick={onBarClick}
         />
       </div>
     </div>
@@ -256,7 +272,7 @@ export default function AnalyticsPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalyticsData | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('quiz');
+  const [viewMode, setViewMode] = useState<ViewMode>('module');
   const [loading, setLoading] = useState(false);
 
   const quiz     = useGroupState();
@@ -289,13 +305,14 @@ export default function AnalyticsPage() {
   const renderContent = () => {
     if (loading) return <div className="text-center py-12 text-gray-500">Loading analytics...</div>;
     if (!data) return null;
-
+  
     const groups: Record<ViewMode, React.ReactNode> = {
       quiz: (
         <ChartGroup data={data.by_quiz} xKey="title"
           search={quiz.search} onSearch={quiz.setSearch}
           sortKey={quiz.sortKey} onSortKey={quiz.setSortKey}
           sortDir={quiz.sortDir} onSortDir={quiz.setSortDir}
+          onBarClick={(entry) => router.push(`/quiz/${entry.quiz_id}`)}
         />
       ),
       module: (
@@ -303,6 +320,7 @@ export default function AnalyticsPage() {
           search={module.search} onSearch={module.setSearch}
           sortKey={module.sortKey} onSortKey={module.setSortKey}
           sortDir={module.sortDir} onSortDir={module.setSortDir}
+          onBarClick={(entry) => router.push(`/home?module=${encodeURIComponent(entry.module)}`)}
         />
       ),
       topic: (
@@ -327,7 +345,7 @@ export default function AnalyticsPage() {
         />
       ) : null,
     };
-
+  
     return groups[viewMode] ?? null;
   };
 
