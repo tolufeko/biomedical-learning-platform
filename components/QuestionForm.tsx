@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import AIFeedbackSuggester from '@/components/AIFeedbackSuggester';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -477,11 +478,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const [uploadingImages, setUploadingImages] = useState<{ [key: string]: boolean }>({});
   const [imageLoadedStates, setImageLoadedStates] = useState<{ [key: string]: boolean }>({});
 
-  // ── Per-question file input refs (keyed by question id) ───────────────────
-  // We use a callback ref map so each question has its own hidden <input type="file">
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
-
-  // Hotspot questions still use the original single ref (unchanged behaviour)
   const hotspotFileInputRef = useRef<HTMLInputElement>(null);
 
   // Question Bank Modal State
@@ -580,8 +577,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         options: newType === 'multiple-choice' ? [''] : [],
         correctAnswer: newType === 'graph_feature' ? DEFAULT_GRAPH_DATA : [],
         graphFeatureData: newType === 'graph_feature' ? DEFAULT_GRAPH_DATA : undefined,
-        // Preserve any uploaded image when switching types (unless switching TO hotspot,
-        // where the image becomes interactive — clear it so the teacher re-uploads intentionally)
         image_url: newType === 'hotspot' ? undefined : q.image_url,
         filePath: newType === 'hotspot' ? undefined : q.filePath,
       };
@@ -633,7 +628,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     ));
   };
 
-  // ── Shared image upload (used by ALL question types) ───────────────────────
+  // ── Shared image upload ────────────────────────────────────────────────────
   const handleImageUpload = async (questionId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -655,7 +650,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       alert(`Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploadingImages(prev => ({ ...prev, [questionId]: false }));
-      // Reset the file input for this question
       if (fileInputRefs.current[questionId]) fileInputRefs.current[questionId]!.value = '';
       if (hotspotFileInputRef.current) hotspotFileInputRef.current.value = '';
     }
@@ -685,7 +679,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const handleImageLoad = (id: string) => setImageLoadedStates(prev => ({ ...prev, [id]: true }));
   const handleImageLoadStart = (id: string) => setImageLoadedStates(prev => ({ ...prev, [id]: false }));
 
-  // ── Hotspot click handler (hotspot type only) ─────────────────────────────
+  // ── Hotspot click handler ──────────────────────────────────────────────────
   const handleImageClick = (questionId: string, event: React.MouseEvent<HTMLDivElement>) => {
     const question = questions.find(q => q.id === questionId);
     if (!question?.image_url) return;
@@ -704,10 +698,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   };
 
   // ── Remove image ──────────────────────────────────────────────────────────
-  // For hotspot: also clears correctAnswer (hotspots depend on the image).
-  // For all other types: only removes the image; correctAnswer is preserved.
   const removeImage = (questionId: string) => {
-    const question = questions.find(q => q.id === questionId);
     setQuestions(qs => qs.map(q => {
       if (q.id !== questionId) return q;
       return {
@@ -715,7 +706,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         image_url: undefined,
         imageFile: null,
         filePath: undefined,
-        // Only reset hotspot answers — other types keep their correctAnswer untouched
         ...(q.type === 'hotspot' ? { correctAnswer: [] } : {}),
       };
     }));
@@ -762,7 +752,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     if (!selected) return;
 
     console.log('Bank question fields:', JSON.stringify(selected, null, 2));
-  
+
     const newQ: LocalQuestion = {
       id: Date.now().toString(),
       type: selected.type,
@@ -776,7 +766,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       question_topic: selected.topic || undefined,
       question_feedback: selected.feedback || undefined,
     };
-  
+
     if (selected.type === 'graph_feature') {
       let gf: GraphFeatureData = DEFAULT_GRAPH_DATA;
       if (typeof selected.correctAnswer === 'string') {
@@ -787,15 +777,15 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       newQ.graphFeatureData = gf;
       newQ.correctAnswer = gf;
     }
-  
+
     const newIndex = questions.length;
-  
+
     setQuestions(prev => [...prev, newQ]);
-  
+
     if (newQ.image_url) {
       setImageLoadedStates(prev => ({ ...prev, [newQ.id]: false }));
     }
-  
+
     setCurrentQuestionIndex(newIndex);
     setIsBankModalOpen(false);
     setSelectedBankQuestion(null);
@@ -966,10 +956,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     );
   };
 
-  // ── Optional image section (text / multiple-choice / graph_feature) ────────
-  // Renders an upload area + preview for non-hotspot question types.
   const renderOptionalImage = (question: LocalQuestion) => {
-    // Hotspot handles its own image UI — skip here
     if (question.type === 'hotspot') return null;
 
     const isUploading = uploadingImages[question.id];
@@ -1007,7 +994,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           )}
         </div>
 
-        {/* Hidden file input scoped to this question */}
         <input
           type="file"
           accept="image/*"
@@ -1018,7 +1004,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         />
 
         {!question.image_url ? (
-          /* Upload dropzone */
           <div
             className="border-2 border-dashed border-gray-300 rounded-lg p-5 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
             onClick={() => !isUploading && fileInputRefs.current[question.id]?.click()}
@@ -1043,7 +1028,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             )}
           </div>
         ) : (
-          /* Image preview */
           <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-gray-50 max-w-lg">
             {!isImageLoaded && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
@@ -1064,7 +1048,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     );
   };
 
-  // ── Hotspot question renderer (unchanged) ─────────────────────────────────
   const renderHotspotQuestion = (question: LocalQuestion) => {
     const hotspots = Array.isArray(question.correctAnswer) && isHotspotArray(question.correctAnswer as any[])
       ? (question.correctAnswer as Hotspot[]) : [];
@@ -1207,6 +1190,28 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
       default:
         return null;
     }
+  };
+
+  // ── Helper: derive a serialisable correctAnswer string for the suggester ───
+  const getCorrectAnswerForSuggester = (question: LocalQuestion): string | string[] => {
+    if (question.type === 'graph_feature') {
+      const gf = question.graphFeatureData;
+      if (!gf) return '';
+      const eqs = (gf.equations ?? []).filter(e => e.expr).map(e => e.expr).join(', ');
+      const pts = gf.features
+        .filter(f => f.x !== '' && f.y !== '')
+        .map(f => `(${f.x}, ${f.y})`)
+        .join(', ');
+      return `Equations: ${eqs || 'none'}. Key points: ${pts || 'none'}`;
+    }
+    if (question.type === 'hotspot') {
+      const hs = Array.isArray(question.correctAnswer) && isHotspotArray(question.correctAnswer as any[])
+        ? (question.correctAnswer as Hotspot[]) : [];
+      return hs.length > 0
+        ? hs.map((h, i) => `Hotspot ${i + 1} at (${h.x.toFixed(1)}%, ${h.y.toFixed(1)}%)`).join(', ')
+        : '';
+    }
+    return question.correctAnswer as string | string[];
   };
 
   const currentQuestion = questions[currentQuestionIndex];
@@ -1355,7 +1360,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                 {renderQuestionOptions(currentQuestion)}
                 {renderCorrectAnswerField(currentQuestion)}
 
-                {/* Feedback */}
+                {/* ── Feedback + AI Suggester ───────────────────────────────── */}
                 <div className="form-group">
                   <label className="block text-sm font-medium mb-2">Feedback:</label>
                   <input
@@ -1364,6 +1369,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                     onChange={e => updateQuestion(currentQuestion.id, 'question_feedback', e.target.value)}
                     placeholder="Enter question's feedback"
                     className="w-full border p-2 rounded"
+                  />
+                  <AIFeedbackSuggester
+                    questionText={currentQuestion.question}
+                    questionType={currentQuestion.type}
+                    options={currentQuestion.options.length > 0 ? currentQuestion.options : undefined}
+                    correctAnswer={getCorrectAnswerForSuggester(currentQuestion)}
+                    quizTitle={formTitle || undefined}
+                    questionTopic={currentQuestion.question_topic || undefined}
+                    currentFeedback={currentQuestion.question_feedback || undefined}
+                    onAccept={(feedback) => updateQuestion(currentQuestion.id, 'question_feedback', feedback)}
                   />
                 </div>
 
