@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# project reports
+f322835\ bimedical\ learning\ platform\ report.pdf
