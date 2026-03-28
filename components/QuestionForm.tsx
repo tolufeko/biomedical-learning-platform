@@ -490,6 +490,12 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const [filterType, setFilterType] = useState<string>('all');
   const [filterTopic, setFilterTopic] = useState<string>('all');
 
+  // AI Quiz Generation State
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [generateReasoning, setGenerateReasoning] = useState<string | null>(null);
+  const [maxQuestions, setMaxQuestions] = useState<number>(10);
+
   // ── Init from initialData ──────────────────────────────────────────────────
   useEffect(() => {
     if (initialData) {
@@ -790,6 +796,116 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     setIsBankModalOpen(false);
     setSelectedBankQuestion(null);
     setSearchTerm('');
+  };
+
+  const handleGenerateQuizFromBank = async () => {
+    if (!formTitle.trim() || !formModule.trim()) {
+      alert('Please enter a quiz title and module before generating.');
+      return;
+    }
+
+    setIsGeneratingQuiz(true);
+    setGenerateError(null);
+    setGenerateReasoning(null);
+
+    try {
+      // 1. Fetch the question bank if not already loaded
+      let bank = questionBank;
+      if (bank.length === 0) {
+        const res = await fetch('/api/question-bank', { headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) throw new Error('Failed to load question bank');
+        const data = await res.json();
+        bank = data.questions || [];
+        setQuestionBank(bank);
+      }
+
+      if (bank.length === 0) {
+        setGenerateError('Your question bank is empty. Add some questions to the bank first.');
+        return;
+      }
+
+      // 2. Ask AI to select relevant questions
+      const res = await fetch('/api/ai-generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formTitle,
+          module: formModule,
+          description: formDescription || undefined,
+          maxQuestions,
+          questions: bank.map((q: any) => ({
+            id: q.id,
+            type: q.type,
+            question: q.question,
+            topic: q.topic || undefined,
+            options: q.options?.length > 0 ? q.options : undefined,
+          })),
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Generation failed');
+
+      const { selectedIds, reasoning } = result;
+
+      if (!selectedIds || selectedIds.length === 0) {
+        setGenerateError('No relevant questions found in the bank for this quiz topic. Try adjusting the title or description.');
+        return;
+      }
+
+      // 3. Add selected questions to the form (same logic as handleSelectFromBank)
+      const toAdd: LocalQuestion[] = selectedIds
+        .map((id: string) => bank.find((q: any) => q.id === id))
+        .filter(Boolean)
+        .map((selected: any) => {
+          const newQ: LocalQuestion = {
+            id: `${Date.now()}-${selected.id}`,
+            type: selected.type,
+            question: selected.question,
+            options: Array.isArray(selected.options) ? [...selected.options] : [],
+            correctAnswer: Array.isArray(selected.correctAnswer)
+              ? [...selected.correctAnswer]
+              : selected.correctAnswer || '',
+            image_url: selected.image_url || undefined,
+            filePath: selected.image_path || undefined,
+            question_topic: selected.topic || undefined,
+            question_feedback: selected.feedback || undefined,
+          };
+
+          if (selected.type === 'graph_feature') {
+            let gf: GraphFeatureData = DEFAULT_GRAPH_DATA;
+            if (typeof selected.correctAnswer === 'string') {
+              try { gf = normaliseGF(JSON.parse(selected.correctAnswer)); } catch {}
+            } else if (isGraphFeatureData(selected.correctAnswer)) {
+              gf = normaliseGF(selected.correctAnswer);
+            }
+            newQ.graphFeatureData = gf;
+            newQ.correctAnswer = gf;
+          }
+
+          return newQ;
+        });
+
+      setQuestions(prev => {
+        const combined = [...prev, ...toAdd];
+        return combined;
+      });
+
+      // Navigate to the first newly added question
+      setCurrentQuestionIndex(questions.length);
+
+      // Show image load states for any questions with images
+      const newImageStates: { [key: string]: boolean } = {};
+      toAdd.forEach(q => { if (q.image_url) newImageStates[q.id] = false; });
+      setImageLoadedStates(prev => ({ ...prev, ...newImageStates }));
+
+      setGenerateReasoning(`Added ${toAdd.length} question${toAdd.length !== 1 ? 's' : ''}. ${reasoning}`);
+
+    } catch (err: any) {
+      setGenerateError(err.message || 'Failed to generate quiz. Please try again.');
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
   };
 
   const filteredBankQuestions = React.useMemo(() =>
@@ -1393,19 +1509,78 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           )}
         </div>
 
+        {/* AI Generate banner */}
+        {generateReasoning && (
+          <div className="mb-4 flex items-start justify-between gap-3 px-4 py-3 bg-violet-50 border border-violet-200 rounded-lg text-sm text-violet-800">
+            <span>✦ {generateReasoning}</span>
+            <button type="button" onClick={() => setGenerateReasoning(null)} className="text-violet-400 hover:text-violet-600 shrink-0">×</button>
+          </div>
+        )}
+        {generateError && (
+          <div className="mb-4 flex items-start justify-between gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <span>{generateError}</span>
+            <button type="button" onClick={() => setGenerateError(null)} className="text-red-400 hover:text-red-600 shrink-0">×</button>
+          </div>
+        )}
+
         {/* Actions */}
-        <div className="form-actions flex justify-between">
-          <button type="button" onClick={addQuestion} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-            Add New Question
-          </button>
-          <button type="button" onClick={addQuestionFromBank} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-            Add From Question Bank
-          </button>
-          {questions.length > 0 && (
-            <button type="submit" className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600">
-              {isEditing ? 'Update Quiz' : 'Save Quiz'}
+        <div className="form-actions flex flex-wrap gap-2 justify-between">
+          <div className="flex gap-2">
+            <button type="button" onClick={addQuestion} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+              Add New Question
             </button>
-          )}
+            <button type="button" onClick={addQuestionFromBank} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+              Add From Question Bank
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Max questions — always visible */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-lg">
+              <label className="text-xs text-violet-700 font-medium whitespace-nowrap">Max questions:</label>
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={maxQuestions}
+                onChange={e => setMaxQuestions(Math.max(1, Math.min(30, Number(e.target.value))))}
+                className="w-14 text-sm text-center border border-violet-300 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateQuizFromBank}
+              disabled={isGeneratingQuiz || !formTitle.trim() || !formModule.trim()}
+              title={!formTitle.trim() || !formModule.trim() ? 'Enter a title and module first' : `Generate up to ${maxQuestions} questions from the question bank`}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded font-medium text-sm transition-all ${
+                isGeneratingQuiz || !formTitle.trim() || !formModule.trim()
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                  : 'bg-violet-600 text-white hover:bg-violet-700 shadow-sm'
+              }`}
+            >
+              {isGeneratingQuiz ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M12 3v2m0 14v2M3 12h2m14 0h2m-3.3-6.7-1.4 1.4M7.7 16.3l-1.4 1.4m0-11.4 1.4 1.4m8.6 8.6 1.4 1.4" />
+                    <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.25" />
+                  </svg>
+                  Generate with AI
+                </>
+              )}
+            </button>
+            {questions.length > 0 && (
+              <button type="submit" className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600">
+                {isEditing ? 'Update Quiz' : 'Save Quiz'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Question Bank Modal ──────────────────────────────────────────── */}
