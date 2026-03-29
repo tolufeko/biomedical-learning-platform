@@ -915,15 +915,20 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   // ── Validation ─────────────────────────────────────────────────────────────
   const validateQuestion = (question: LocalQuestion): string | null => {
     if (!question.question.trim()) return 'Question text is required';
-
+    if (question.question.length > 1000) return 'Question text must be under 1000 characters';
+  
     switch (question.type) {
       case 'text':
         if (!question.correctAnswer || (question.correctAnswer as string).trim() === '')
           return 'Correct answer is required for text questions';
+        if ((question.correctAnswer as string).length > 500)
+          return 'Correct answer must be under 500 characters';
         break;
       case 'multiple-choice':
         if (question.options.length < 2) return 'Multiple choice needs at least 2 options';
+        if (question.options.length > 20) return 'Multiple choice can have at most 20 options';
         if (question.options.some(o => !o.trim())) return 'All options must have text';
+        if (question.options.some(o => o.length > 500)) return 'Options must be under 500 characters each';
         if (!Array.isArray(question.correctAnswer) || (question.correctAnswer as string[]).length === 0)
           return 'Please select at least one correct answer';
         break;
