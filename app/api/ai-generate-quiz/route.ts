@@ -2,13 +2,9 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getServerUser } from '@/lib/auth/getServerUser';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Per-user rate limit: 3 quiz generations per minute (more expensive call)
-const requestCounts = new Map<string, { count: number; resetAt: number }>();
-const MAX_REQUESTS = 3;
-const WINDOW_MS = 60_000;
 
 export interface GenerateQuizPayload {
   title: string;
@@ -72,20 +68,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
     }
 
-    // Rate limiting
-    const now = Date.now();
-    const userRate = requestCounts.get(user.id);
-    if (userRate && now < userRate.resetAt) {
-      if (userRate.count >= MAX_REQUESTS) {
-        const secsLeft = Math.ceil((userRate.resetAt - now) / 1000);
-        return NextResponse.json(
-          { error: `Rate limit reached. Try again in ${secsLeft}s.` },
-          { status: 429 }
-        );
-      }
-      userRate.count++;
-    } else {
-      requestCounts.set(user.id, { count: 1, resetAt: now + WINDOW_MS });
+    const rateLimit = checkRateLimit(user.id, 'ai-generate-quiz', {
+      maxRequests: 3,
+      windowMs: 60_000,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: `Rate limit reached. Try again in ${rateLimit.secondsLeft}s.` },
+        { status: 429 }
+      );
     }
 
     const payload: GenerateQuizPayload = await request.json();
@@ -108,12 +100,10 @@ export async function POST(request: Request) {
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: buildPrompt(payload) }],
       max_tokens: 500,
-      temperature: 0.3, // Low temp for consistent, deterministic selection
+      temperature: 0.3,
     });
 
     const raw = completion.choices[0]?.message?.content ?? '';
-
-    // Strip any accidental markdown fences
     const cleaned = raw.replace(/```json|```/g, '').trim();
 
     let parsed: GenerateQuizResponse;
@@ -127,7 +117,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate that returned IDs actually exist in the bank
     const validIds = new Set(payload.questions.map(q => q.id));
     const filteredIds = (parsed.selectedIds ?? []).filter(id => validIds.has(id));
 

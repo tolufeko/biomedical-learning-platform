@@ -2,13 +2,9 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getServerUser } from '@/lib/auth/getServerUser';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Simple per-user cooldown: 5 requests per minute
-const requestCounts = new Map<string, { count: number; resetAt: number }>();
-const MAX_REQUESTS = 5;
-const WINDOW_MS = 60_000;
 
 export interface QuestionFeedbackPayload {
   questionText: string;
@@ -58,20 +54,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
     }
 
-    // Rate limiting
-    const now = Date.now();
-    const userRate = requestCounts.get(user.id);
-    if (userRate && now < userRate.resetAt) {
-      if (userRate.count >= MAX_REQUESTS) {
-        const secsLeft = Math.ceil((userRate.resetAt - now) / 1000);
-        return NextResponse.json(
-          { error: `Rate limit reached. Try again in ${secsLeft}s.` },
-          { status: 429 }
-        );
-      }
-      userRate.count++;
-    } else {
-      requestCounts.set(user.id, { count: 1, resetAt: now + WINDOW_MS });
+    const rateLimit = checkRateLimit(user.id, 'ai-question-feedback', {
+      maxRequests: 5,
+      windowMs: 60_000,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: `Rate limit reached. Try again in ${rateLimit.secondsLeft}s.` },
+        { status: 429 }
+      );
     }
 
     const payload: QuestionFeedbackPayload = await request.json();
