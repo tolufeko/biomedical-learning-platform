@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { evaluateExpr } from '@/lib/utility/evaluateExpr';
 
 // =============== TYPE DEFINITIONS ===============
 
@@ -217,19 +218,6 @@ function parseEquationType(raw: string): { type: 'vertical'; xVal: number } | { 
   if (horizConst) return { type: 'horizontal', yVal: parseFloat(horizConst[1]) };
   const expr = s.startsWith('y=') ? s.slice(2) : s;
   return { type: 'function', expr };
-}
-
-function evaluateExpr(expr: string, x: number): number | null {
-  try {
-    let e = expr
-      .replace(/\^/g, '**')
-      .replace(/(\d)(x)/g, '$1*x')
-      .replace(/x(\d)/g, 'x**$1')
-      .replace(/x/g, `(${x})`);
-    // eslint-disable-next-line no-new-func
-    const y = new Function(`return (${e})`)();
-    return typeof y === 'number' && isFinite(y) ? y : null;
-  } catch { return null; }
 }
 
 function drawEquation(

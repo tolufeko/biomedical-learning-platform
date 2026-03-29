@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { checkRateLimit } from '@/lib/utility/rateLimit';
 
 const supabaseAdmin = supabaseServer();
 

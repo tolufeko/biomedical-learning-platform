@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getServerUser } from '@/lib/auth/getServerUser';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { checkRateLimit } from '@/lib/utility/rateLimit';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
