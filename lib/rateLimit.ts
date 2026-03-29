@@ -1,0 +1,10 @@
+// lib/ratelimit.ts
+const requestCounts = new Map<string, { count: number; resetAt: number }>();
+
+// Clean up expired entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of requestCounts.entries()) {
+    if (now >= value.resetAt) requestCounts.delete(key);
+  }
+}, 5 * 60 * 1000);

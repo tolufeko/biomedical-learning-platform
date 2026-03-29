@@ -1,12 +1,9 @@
-// app/api/ai-feedback/route.ts
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getServerUser } from '@/lib/auth/getServerUser';
+import { checkRateLimit } from 'lib/rateLimit.ts';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-const recentRequests = new Map<string, number>();
-const COOLDOWN_MS = 60_000;
 
 export interface QuizFeedbackQuestion {
   questionText: string;
@@ -72,13 +69,18 @@ Keep the total response under 400 words. Use plain language. No bullet points in
 export async function POST(request: Request) {
   try {
     const user = await getServerUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
+    }
 
-    const lastCall = recentRequests.get(user.id);
-    if (lastCall && Date.now() - lastCall < COOLDOWN_MS) {
-      const secondsLeft = Math.ceil((COOLDOWN_MS - (Date.now() - lastCall)) / 1000);
+    const rateLimit = checkRateLimit(user.id, 'ai-feedback', {
+      maxRequests: 5,
+      windowMs: 60_000,
+    });
+
+    if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: `Please wait ${secondsLeft}s before requesting feedback again.` },
+        { error: `Please wait ${rateLimit.secondsLeft}s before requesting feedback again.` },
         { status: 429 }
       );
     }
@@ -98,8 +100,6 @@ export async function POST(request: Request) {
     }
 
     if (payload.questions.length > 20) payload.questions = payload.questions.slice(0, 20);
-
-    recentRequests.set(user.id, Date.now());
 
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -130,7 +130,10 @@ export async function POST(request: Request) {
       },
     });
   } catch (error: any) {
-    console.error('🐞 Quiz feedback API error:', error);
-    return NextResponse.json({ error: 'Failed to generate feedback. Please try again.' }, { status: 500 });
+    console.error('Quiz feedback API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate feedback. Please try again.' },
+      { status: 500 }
+    );
   }
 }
