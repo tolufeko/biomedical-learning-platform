@@ -1,7 +1,7 @@
-// app/api/quizzes/route.ts
 import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const supabaseAdmin = supabaseServer();
 
@@ -49,6 +49,18 @@ export async function POST(request: Request) {
   try {
     const user = await getServerUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
+
+    const rateLimit = checkRateLimit(user.id, 'create-quiz', {
+      maxRequests: 10,
+      windowMs: 60_000,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: `Too many quizzes created. Try again in ${rateLimit.secondsLeft}s.` },
+        { status: 429 }
+      );
+    }
 
     const { title, module, questions, description } = await request.json();
 
