@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { ArrowLeft } from 'lucide-react';
@@ -16,7 +16,7 @@ interface Quiz {
   created_at?: string;
 }
 
-export default function HomePage() {
+function HomeContent() {
   const router = useRouter();
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -190,5 +190,13 @@ export default function HomePage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }
