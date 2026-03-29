@@ -1,13 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+// lib/auth/permissions.ts
+import { supabaseServer } from '@/lib/supabase/supabaseServer';
 import { PRIVILEGED_ROLES } from '@/lib/constants/roles';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function getUserRole(userId: string) {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabaseServer()
     .from('profiles').select('role').eq('id', userId).single();
   return error ? null : data.role;
 }
