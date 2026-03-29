@@ -954,6 +954,12 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     if (!formModule.trim()) { alert('Please enter a quiz module'); return; }
     if (questions.length === 0) { alert('Please add at least one question'); return; }
 
+    if (formTitle.length > 200) { alert('Quiz title must be under 200 characters'); return; }
+    if (formModule.length > 200) { alert('Module name must be under 200 characters'); return; }
+    if (formDescription.length > 1000) { alert('Description must be under 1000 characters'); return; }
+    if (questions.length > 100) { alert('A quiz can have at most 100 questions'); return; }
+  
+
     const errors = questions.map(q => validateQuestion(q)).filter(Boolean);
     if (errors.length > 0) { alert(`Please fix:\n\n${errors.join('\n')}`); return; }
 
