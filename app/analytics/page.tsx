@@ -10,7 +10,7 @@ import {
   ResponsiveContainer, Legend,
 } from 'recharts';
 
-// ── Types & Helpers (Unchanged) ─────────────────────────────────────────────
+// ── Types & Helpers
 interface RawRecord {
   user_id: string;
   username: string;
