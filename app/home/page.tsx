@@ -1,3 +1,4 @@
+// app/home/page.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -16,12 +17,9 @@ interface Quiz {
   created_at?: string;
 }
 
-function HomeContent() {
+function HomeContent({ selectedModule }: { selectedModule: string | null }) {
   const router = useRouter();
   const { user } = useAuth();
-  const searchParams = useSearchParams();
-
-  const selectedModule = searchParams.get('module');
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -193,10 +191,20 @@ function HomeContent() {
   );
 }
 
+function SearchParamsWrapper() {
+  const searchParams = useSearchParams();
+  const selectedModule = searchParams.get('module');
+  return <HomeContent selectedModule={selectedModule} />;
+}
+
 export default function HomePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>}>
-      <HomeContent />
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        Loading...
+      </div>
+    }>
+      <SearchParamsWrapper />
     </Suspense>
   );
 }
