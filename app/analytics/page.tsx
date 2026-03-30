@@ -88,12 +88,11 @@ function FilterSelect({
 }: {
   label: string; value: string; onChange: (v: string) => void; options: string[];
 }) {
-  const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   
   const filtered = useMemo(() => 
-    options.filter(o => o.toLowerCase().includes(search.toLowerCase())),
-    [options, search]
+    options.filter(o => o.toLowerCase().includes(value.toLowerCase())),
+    [options, value]
   );
 
   if (!options.length) return null;
@@ -105,16 +104,16 @@ function FilterSelect({
         <input
           type="text"
           placeholder={`Filter ${label}...`}
-          value={value || search}
+          value={value}
           onFocus={() => setIsOpen(true)}
           onBlur={() => setTimeout(() => setIsOpen(false), 200)}
-          onChange={e => { setSearch(e.target.value); if(!e.target.value) onChange(''); }}
+          onChange={e => onChange(e.target.value)}
           className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         />
         {isOpen && (
           <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white shadow-xl">
             <button
-              onClick={() => { onChange(''); setSearch(''); }}
+              onClick={() => { onChange(''); }}
               className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${!value ? 'bg-blue-50 text-blue-600 font-medium' : ''}`}
             >
               All {label}s
@@ -122,7 +121,7 @@ function FilterSelect({
             {filtered.map(o => (
               <button
                 key={o}
-                onClick={() => { onChange(o); setSearch(o); setIsOpen(false); }}
+                onClick={() => { onChange(o); setIsOpen(false); }}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${value === o ? 'bg-blue-50 text-blue-600 font-medium' : ''}`}
               >
                 {o}
