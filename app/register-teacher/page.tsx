@@ -1,4 +1,4 @@
-// app/register/page.tsx
+// app/register-teacher/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -7,7 +7,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabaseClient";
 import { useAuth } from "@/lib/auth/AuthContext";
 
-export default function SignUpPage() {
+export default function TeacherSignUpPage() {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -203,14 +203,14 @@ export default function SignUpPage() {
             {loading ? "Creating Account..." : "Register"}
           </button>
         </form>
-        
+
         <p className="text-sm text-center text-gray-600 mt-4">
-          Are you a teacher?{" "}
-          <Link href="/register-teacher" className="text-blue-600 hover:underline">
+          Are you a student?{" "}
+          <Link href="/register" className="text-blue-600 hover:underline">
             Register
           </Link>
         </p>
-        
+
         <p className="text-sm text-center text-gray-600 mt-2">
           Already have an account?{" "}
           <Link href="/" className="text-blue-600 hover:underline font-medium">
