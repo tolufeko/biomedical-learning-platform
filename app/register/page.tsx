@@ -66,7 +66,7 @@ export default function SignUpPage() {
     
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert({ id: data.user.id, username, role: 'teacher' });
+        .upsert({ id: data.user.id, username, role: 'student' });
     
       if (profileError) {
         if (profileError.code === '23505') {
