@@ -56,62 +56,30 @@ export default function TeacherSignUpPage() {
     }
 
     try {
-      // Check if username already exists
-      const { data: usernameExists, error: usernameError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("username", username)
-        .single();
-
-      // If error is NOT "no rows", it's a real error
-      if (usernameError && usernameError.code !== "PGRST116") {
-        throw usernameError;
-      }
-
-      if (usernameExists) {
-        alert("Username is already taken.");
-        setLoading(false);
-        return;
-      }
-
-      // Sign up the user
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { 
-            username // Store username in auth metadata for easy access
-          }
-        }
+      const { data, error } = await supabase.auth.signUp({ 
+        email, 
+        password, 
+        options: { data: { username } } 
       });
-
       if (error) throw error;
-
-      if (!data.user) {
-        throw new Error("User creation failed");
-      }
-
-      // The trigger in the database will create the profile automatically
-      // with default role 'student', but we need to update the username
-      // Wait a bit for the trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Update the profile with username
+      if (!data.user) throw new Error("User creation failed");
+    
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ 
-          username: username 
-        })
-        .eq('id', data.user.id);
-
+        .upsert({ id: data.user.id, username, role: 'teacher' });
+    
       if (profileError) {
-        console.error("Profile update error:", profileError);
-        // Don't fail registration if username update fails
+        if (profileError.code === '23505') {
+          alert("Username is already taken.");
+        } else {
+          throw profileError;
+        }
+        return;
       }
-
+    
       alert("Registration successful! Please check your email to confirm.");
       router.push("/");
-
+    
     } catch (error: any) {
       console.error("Signup error:", error);
       alert("Registration failed: " + (error.message || "Unknown error"));
