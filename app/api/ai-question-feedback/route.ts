@@ -50,6 +50,7 @@ Output only the feedback text. Nothing else.`;
 export async function POST(request: Request) {
   try {
     const user = await getServerUser();
+    console.log('User:', user?.id ?? 'null');
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
     }
@@ -67,6 +68,9 @@ export async function POST(request: Request) {
     }
 
     const payload: QuestionFeedbackPayload = await request.json();
+    console.log('Payload received:', JSON.stringify(payload));
+    console.log('OpenAI key exists:', !!process.env.OPENAI_API_KEY);
+    console.log('OpenAI key prefix:', process.env.OPENAI_API_KEY?.slice(0, 7));
 
     if (!payload.questionText || !payload.correctAnswer) {
       return NextResponse.json(
@@ -104,9 +108,12 @@ export async function POST(request: Request) {
       },
     });
   } catch (error: any) {
-    console.error('AI question feedback error:', error);
+    console.error('Full error object:', error);
+    console.error('Error message:', error.message);
+    console.error('Error status:', error.status);
+    console.error('Error stack:', error.stack);
     return NextResponse.json(
-      { error: 'Failed to generate feedback. Please try again.' },
+      { error: error.message || 'Failed to generate feedback. Please try again.' },
       { status: 500 }
     );
   }
