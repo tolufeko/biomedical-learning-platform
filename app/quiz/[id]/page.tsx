@@ -43,6 +43,10 @@ function isHotspotAnswer(obj: any): obj is HotspotAnswer {
 }
 
 function normaliseGraphFeatureData(raw: any): GraphFeatureData {
+  // Handle string input by parsing it first
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch { raw = null; }
+  }
   if (!raw) return { equations: [{ id: 'eq0', expr: '', color: '#6366f1' }], xMin: -10, xMax: 10, yMin: -10, yMax: 10, features: [] };
   if (!raw.equations && raw.equation !== undefined) {
     const { graphType, imageUrl, equationColor, equation, ...rest } = raw;
@@ -99,6 +103,24 @@ interface QuestionState {
 
 // =============== FEEDBACK HELPERS ===============
 
+function makeInitialAnswerState(q: QuizQuestion): AnswerState {
+  switch (q.question_type) {
+    case 'multiple-choice':
+      return { type: 'multiple-choice', userAnswer: null };
+    case 'checkbox':
+      return { type: 'checkbox', userAnswer: null };
+    case 'hotspot':
+      return { type: 'hotspot', userAnswer: null };
+    case 'graph_feature': {
+      const gf = normaliseGraphFeatureData((q as GraphFeatureQuestion).correct_answer);
+
+      return { type: 'graph_feature', userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [] };
+    }
+    default:
+      return { type: 'text', userAnswer: null };
+  }
+}
+
 function formatCorrectAnswerForFeedback(question: QuizQuestion): string {
   if (question.question_type === 'text') return question.correct_answer;
   if (question.question_type === 'multiple-choice' || question.question_type === 'checkbox')
@@ -107,7 +129,7 @@ function formatCorrectAnswerForFeedback(question: QuizQuestion): string {
     return question.correct_answer.map(s => `(${Math.round(s.x)}%, ${Math.round(s.y)}%)`).join(' | ');
   if (question.question_type === 'graph_feature') {
     const ca = question.correct_answer;
-    const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
+    const gf = normaliseGraphFeatureData(question.correct_answer);
     return gf ? gf.features.map(f => `(${f.x}, ${f.y})`).join(' | ') : '—';
   }
   return '—';
@@ -381,11 +403,7 @@ function GraphFeatureQuestionView({
   questionState: QuestionState | undefined;
   onAnswerChange: (answers: GraphStudentAnswer[]) => void;
 }) {
-  const graphData: GraphFeatureData | null = (() => {
-    const ca = question.correct_answer;
-    return normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
-  })();
-
+  const graphData = normaliseGraphFeatureData(question.correct_answer);
   const submitted = questionState?.isSubmitted ?? false;
   const showSol = questionState?.showSolution ?? false;
 
@@ -538,6 +556,7 @@ export default function QuizPage() {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [questionStates, setQuestionStates] = useState<QuestionState[]>([]);
+  const [finalScore, setFinalScore] = useState<{ correct: number; total: number; percentage: number } | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -546,6 +565,7 @@ export default function QuizPage() {
   const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
   const [aiFeedbackRequested, setAiFeedbackRequested] = useState(false);
   const [aiFeedbackError, setAiFeedbackError] = useState<string | null>(null);
+  
 
   const { user, role } = useAuth();
 
@@ -570,10 +590,15 @@ export default function QuizPage() {
     return false;
   };
 
-  const calculateScore = () => {
-    const correct = questionStates.filter(s => s.isCorrect).length;
-    return { correct, total: totalQuestions, percentage: totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0 };
-  };
+  function calculateScore(questions: QuizQuestion[], states: QuestionState[]) {
+    const correct = states.filter(s => s.isCorrect).length;
+    const total = questions.length;
+    return {
+      correct,
+      total,
+      percentage: total > 0 ? Math.round((correct / total) * 100) : 0,
+    };
+  }
 
   const saveAnalytics = async (questionAssignmentId: string, isCorrect: boolean, timeSpent: number) => {
     if (!user || role === 'guest') return;
@@ -594,10 +619,9 @@ export default function QuizPage() {
     setAiFeedback('');
 
     try {
-      const score = calculateScore();
       const payload = {
         quizTitle: quizData!.title,
-        score: score.percentage,
+        score: finalScore!.percentage,
         questions: questions.map((q, i) => ({
           questionText: q.question_text,
           questionType: q.question_type,
@@ -644,35 +668,15 @@ export default function QuizPage() {
 
   useEffect(() => {
     if (questions.length === 0) return;
-    const initialStates: QuestionState[] = questions.map(q => {
-      let answerState: AnswerState;
-      switch (q.question_type) {
-        case 'text':
-          answerState = { type: 'text', userAnswer: null };
-          break;
-        case 'multiple-choice':
-          answerState = { type: 'multiple-choice', userAnswer: null };
-          break;
-        case 'checkbox':
-          answerState = { type: 'checkbox', userAnswer: null };
-          break;
-        case 'hotspot':
-          answerState = { type: 'hotspot', userAnswer: null };
-          break;
-        case 'graph_feature': {
-          const ca = (q as GraphFeatureQuestion).correct_answer;
-          const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
-          answerState = {
-            type: 'graph_feature',
-            userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [],
-          };
-          break;
-        }
-        default:
-          answerState = { type: 'text', userAnswer: null };
-      }
-      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, showFeedback: false, startTime: Date.now(), endTime: null };
-    });
+    const initialStates: QuestionState[] = questions.map(q => ({
+      answerState: makeInitialAnswerState(q),
+      isSubmitted: false,
+      isCorrect: null,
+      showSolution: false,
+      showFeedback: false,
+      startTime: Date.now(),
+      endTime: null,
+    }));
     setQuestionStates(initialStates);
   }, [questions.length]);
 
@@ -758,8 +762,7 @@ export default function QuizPage() {
 
   const gradeQuestion = (question: QuizQuestion, state: QuestionState): boolean => {
     if (question.question_type === 'graph_feature' && state.answerState.type === 'graph_feature') {
-      const ca = question.correct_answer;
-      const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
+      const gf = normaliseGraphFeatureData(question.correct_answer);
       if (!gf) return false;
       const answers = state.answerState.userAnswer || [];
       if (answers.length !== gf.features.length) return false;
@@ -827,35 +830,9 @@ export default function QuizPage() {
 
   const retryQuestion = () => {
     const newStates = [...questionStates];
-    const q = questions[currentQuestionIndex];
-    let freshAnswer: AnswerState;
-
-    switch (q.question_type) {
-      case 'text':
-        freshAnswer = { type: 'text', userAnswer: null };
-        break;
-      case 'multiple-choice':
-        freshAnswer = { type: 'multiple-choice', userAnswer: null };
-        break;
-      case 'checkbox':
-        freshAnswer = { type: 'checkbox', userAnswer: null };
-        break;
-      case 'hotspot':
-        freshAnswer = { type: 'hotspot', userAnswer: null };
-        break;
-      case 'graph_feature': {
-        const ca = (q as GraphFeatureQuestion).correct_answer;
-        const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
-        freshAnswer = { type: 'graph_feature', userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [] };
-        break;
-      }
-      default:
-        freshAnswer = { type: 'text', userAnswer: null };
-    }
-
     newStates[currentQuestionIndex] = {
       ...newStates[currentQuestionIndex],
-      answerState: freshAnswer,
+      answerState: makeInitialAnswerState(questions[currentQuestionIndex]),
       isSubmitted: false,
       isCorrect: null,
       showSolution: false,
@@ -905,6 +882,7 @@ export default function QuizPage() {
       }
     }
     setQuestionStates(newStates);
+    setFinalScore(calculateScore(questions, newStates));
     setShowResults(true);
   };
 
@@ -912,21 +890,15 @@ export default function QuizPage() {
     setAiFeedback('');
     setAiFeedbackRequested(false);
     setAiFeedbackError(null);
-    setQuestionStates(questions.map(q => {
-      let answerState: AnswerState = { type: 'text', userAnswer: null };
-      if (q.question_type === 'multiple-choice')
-        answerState = { type: 'multiple-choice', userAnswer: null };
-      else if (q.question_type === 'checkbox')
-        answerState = { type: 'checkbox', userAnswer: null };
-      else if (q.question_type === 'hotspot')
-        answerState = { type: 'hotspot', userAnswer: null };
-      else if (q.question_type === 'graph_feature') {
-        const ca = (q as GraphFeatureQuestion).correct_answer;
-        const gf = normaliseGraphFeatureData(typeof ca === 'string' ? (() => { try { return JSON.parse(ca); } catch { return null; } })() : ca);
-        answerState = { type: 'graph_feature', userAnswer: gf ? gf.features.map(f => ({ id: f.id, x: '', y: '' })) : [] };
-      }
-      return { answerState, isSubmitted: false, isCorrect: null, showSolution: false, showFeedback: false, startTime: Date.now(), endTime: null };
-    }));
+    setQuestionStates(questions.map(q => ({
+      answerState: makeInitialAnswerState(q),
+      isSubmitted: false,
+      isCorrect: null,
+      showSolution: false,
+      showFeedback: false,
+      startTime: Date.now(),
+      endTime: null,
+    })));
     setCurrentQuestionIndex(0);
     setShowResults(false);
   };
@@ -958,7 +930,7 @@ export default function QuizPage() {
   // =============== RESULTS SCREEN ===============
 
   if (showResults) {
-    const score = calculateScore();
+    const score = finalScore!;
     const feedback = computeStandardFeedback(questions, questionStates);
 
     return (
@@ -1043,7 +1015,7 @@ export default function QuizPage() {
                       ? answers.map(a => `(${a.x || '?'}, ${a.y || '?'})`).join(' | ')
                       : 'No answer';
                     const gfCa = question.correct_answer;
-                    const gf = normaliseGraphFeatureData(typeof gfCa === 'string' ? (() => { try { return JSON.parse(gfCa); } catch { return null; } })() : gfCa);
+                    const gf = normaliseGraphFeatureData(gfCa);
                     correctAnswerDisplay = gf ? gf.features.map(f => `(${f.x}, ${f.y})`).join(' | ') : '—';
                   } else if (question.question_type === 'hotspot') {
                     const spots = state.answerState.type === 'hotspot' ? state.answerState.userAnswer || [] : [];

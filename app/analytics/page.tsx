@@ -356,10 +356,7 @@ export default function AnalyticsPage() {
   const [isPrivilegedData, setIsPrivilegedData] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('student');
   const [loading, setLoading] = useState(false);
-
-  const [filterModule, setFilterModule]   = useState('');
-  const [filterQuiz, setFilterQuiz]       = useState('');
-  const [filterTopic, setFilterTopic]     = useState('');
+  const [filters, setFilters] = useState({ module: '', quiz: '', topic: '' });
 
   const quiz     = useGroupState();
   const module   = useGroupState();
@@ -393,22 +390,20 @@ export default function AnalyticsPage() {
   const allTopics  = useMemo(() => [...new Set(records.map(r => r.question_topic))].sort(), [records]);
 
   const filteredRecords = useMemo(() => records.filter(r => {
-    if (filterModule && r.module !== filterModule) return false;
-    if (filterQuiz   && r.quiz_title !== filterQuiz) return false;
-    if (filterTopic  && r.question_topic !== filterTopic) return false;
+    if (filters.module && r.module !== filters.module) return false;
+    if (filters.quiz   && r.quiz_title !== filters.quiz) return false;
+    if (filters.topic  && r.question_topic !== filters.topic) return false;
     return true;
-  }), [records, filterModule, filterQuiz, filterTopic]);
+  }), [records, filters]);
 
   const by_quiz = useMemo(() => aggregate(filteredRecords, r => r.quiz_id, r => ({ quiz_id: r.quiz_id, title: r.quiz_title })), [filteredRecords]);
   const by_module = useMemo(() => aggregate(filteredRecords, r => r.module, r => ({ module: r.module })), [filteredRecords]);
   const by_topic = useMemo(() => aggregate(filteredRecords, r => r.question_topic, r => ({ topic: r.question_topic })), [filteredRecords]);
   const by_question = useMemo(() => aggregate(filteredRecords, r => r.question_id, r => ({ question_id: r.question_id, text: r.question_text })), [filteredRecords]);
   const by_student = useMemo(() => isPrivilegedData ? aggregate(filteredRecords, r => r.user_id, r => ({ user_id: r.user_id, username: r.username })) : [], [filteredRecords, isPrivilegedData]);
-
+  
   const handleClearAll = () => {
-    setFilterModule('');
-    setFilterQuiz('');
-    setFilterTopic('');
+    setFilters({ module: '', quiz: '', topic: '' });
     [module, quiz, topic, question, student].forEach(s => {
       s.setSearch('');
       s.setSortKey('average_score');
@@ -420,10 +415,9 @@ export default function AnalyticsPage() {
     if (loading) return <div className="text-center py-12 text-gray-500 font-medium">Loading analytics...</div>;
     if (!records.length && !loading) return <div className="text-center py-12 text-gray-400">No data available.</div>;
 
-    const moduleFilter = <FilterSelect label="Module" value={filterModule} onChange={setFilterModule} options={allModules} />;
-    const quizFilter = <FilterSelect label="Quiz" value={filterQuiz} onChange={setFilterQuiz} options={allQuizzes} />;
-    const topicFilter = <FilterSelect label="Topic" value={filterTopic} onChange={setFilterTopic} options={allTopics} />;
-
+    const moduleFilter = <FilterSelect label="Module" value={filters.module} onChange={v => setFilters(f => ({ ...f, module: v }))} options={allModules} />;
+    const quizFilter   = <FilterSelect label="Quiz"   value={filters.quiz}   onChange={v => setFilters(f => ({ ...f, quiz: v }))}   options={allQuizzes} />;
+    const topicFilter  = <FilterSelect label="Topic"  value={filters.topic}  onChange={v => setFilters(f => ({ ...f, topic: v }))}  options={allTopics} />;
     const commonProps = { onClearAll: handleClearAll };
 
     const groups: Record<ViewMode, React.ReactNode> = {

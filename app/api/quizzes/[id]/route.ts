@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { getUserRole } from '@/lib/auth/permissions';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
+import { shapeQuestion } from '@/lib/utility/quizTransform';
+import type { QuizQuestionRaw } from '@/lib/types/quiz';
 
 const supabaseAdmin = supabaseServer();
 
@@ -215,8 +217,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({
       ...updateResult.data,
-      questions: updatedAssignments?.map(a => ({
-        ...a.questions,
+      questions: updatedAssignments?.map(a => shapeQuestion({
+        ...(a.questions as unknown as QuizQuestionRaw),
         display_order: a.display_order,
         question_assignment_id: a.id,
       })) || [],

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
+import { shapeQuestion } from '@/lib/utility/quizTransform';
 
 // =============== TYPES ===============
 interface HotspotAnswer { x: number; y: number; }
@@ -142,7 +143,7 @@ export default function TeacherPage() {
     try {
       const res = await fetch(`/api/quizzes/${quizId}`);
       const fullQuiz = await res.json();
-      setEditingForm(fullQuiz);
+      setEditingForm({ ...fullQuiz, questions: fullQuiz.questions.map(shapeQuestion) });
       setIsEditModalOpen(true);
       setShowQuizzesList(true);
     } catch {
@@ -151,18 +152,6 @@ export default function TeacherPage() {
       setFormsLoading(false);
     }
   };
-
-  const convertQuizQuestions = (questions: QuizQuestion[]) =>
-    questions.map(q => ({
-      type: q.question_type,
-      question: q.question_text,
-      options: q.options || [],
-      correctAnswer: q.correct_answer,
-      image_url: q.image_url || (q.question_type === 'hotspot' ? '' : undefined),
-      image_path: q.image_path || (q.question_type === 'hotspot' ? '' : undefined),
-      question_topic: q.question_topic || undefined,
-      question_feedback: q.question_feedback || undefined,
-    }));
 
   if (role !== 'teacher' && role !== 'admin') return null;
 
@@ -298,7 +287,7 @@ export default function TeacherPage() {
                   title: editingForm.title,
                   module: editingForm.module,
                   description: editingForm.description || '',
-                  questions: convertQuizQuestions(editingForm.questions),
+                  questions: editingForm.questions,
                 }}
                 isEditing={true}
               />
