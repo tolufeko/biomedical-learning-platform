@@ -6,37 +6,11 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { evaluateExpr } from '@/lib/utility/evaluateExpr';
+import { HotspotAnswer, AnswerState, QuestionState, GraphStudentAnswer } from "@/lib/types/answers";
+import { QuizQuestionData, GraphFeatureQuestion, QuizData } from "@/lib/types/quiz";
+import { GraphFeatureData } from "@/lib/types/graph";
+import { StandardFeedback } from "@/lib/types/feedback";
 
-// =============== TYPE DEFINITIONS ===============
-
-interface HotspotAnswer { x: number; y: number; }
-
-interface EquationEntry {
-  id: string;
-  expr: string;
-  color: string;
-}
-
-interface FeatureAnswer {
-  id: string;
-  x: number | '';
-  y: number | '';
-}
-
-interface GraphFeatureData {
-  equations: EquationEntry[];
-  xLabel?: string;
-  yLabel?: string;
-  xMin: number; xMax: number;
-  yMin: number; yMax: number;
-  features: FeatureAnswer[];
-}
-
-interface GraphStudentAnswer {
-  id: string;
-  x: string;
-  y: string;
-}
 
 function isHotspotAnswer(obj: any): obj is HotspotAnswer {
   return obj && typeof obj === 'object' && 'x' in obj && 'y' in obj;
@@ -57,53 +31,9 @@ function normaliseGraphFeatureData(raw: any): GraphFeatureData {
   return { ...rest } as GraphFeatureData;
 }
 
-type QuestionType = 'text' | 'multiple-choice' | 'checkbox' | 'hotspot' | 'graph_feature';
-
-interface BaseQuizQuestion {
-  id: string;
-  question_type: QuestionType;
-  question_text: string;
-  question_feedback: string;
-  topic?: string; 
-  image_path?: string;
-  image_url?: string;
-  question_assignment_id: string;
-}
-
-interface TextQuestion extends BaseQuizQuestion { question_type: 'text'; correct_answer: string; }
-interface MultipleChoiceQuestion extends BaseQuizQuestion { question_type: 'multiple-choice'; options: string[]; correct_answer: string[]; }
-interface CheckboxQuestion extends BaseQuizQuestion { question_type: 'checkbox'; options: string[]; correct_answer: string[]; }
-interface HotspotQuestion extends BaseQuizQuestion { question_type: 'hotspot'; correct_answer: HotspotAnswer[]; }
-interface GraphFeatureQuestion extends BaseQuizQuestion { question_type: 'graph_feature'; correct_answer: GraphFeatureData | string; }
-
-type QuizQuestion = TextQuestion | MultipleChoiceQuestion | CheckboxQuestion | HotspotQuestion | GraphFeatureQuestion;
-
-interface QuizData {
-  id: string;
-  title: string;
-  description?: string;
-  questions: QuizQuestion[];
-}
-
-interface TextAnswerState       { type: 'text';           userAnswer: string | null; }
-interface ChoiceAnswerState     { type: 'multiple-choice' | 'checkbox'; userAnswer: string[] | null; }
-interface HotspotAnswerState    { type: 'hotspot';        userAnswer: HotspotAnswer[] | null; }
-interface GraphFeatureAnswerState { type: 'graph_feature'; userAnswer: GraphStudentAnswer[] | null; }
-type AnswerState = TextAnswerState | ChoiceAnswerState | HotspotAnswerState | GraphFeatureAnswerState;
-
-interface QuestionState {
-  answerState: AnswerState;
-  isSubmitted: boolean;
-  isCorrect: boolean | null;
-  showSolution: boolean;
-  showFeedback: boolean;
-  startTime: number;
-  endTime: number | null;
-}
-
 // =============== FEEDBACK HELPERS ===============
 
-function makeInitialAnswerState(q: QuizQuestion): AnswerState {
+function makeInitialAnswerState(q: QuizQuestionData): AnswerState {
   switch (q.question_type) {
     case 'multiple-choice':
       return { type: 'multiple-choice', userAnswer: null };
@@ -121,7 +51,7 @@ function makeInitialAnswerState(q: QuizQuestion): AnswerState {
   }
 }
 
-function formatCorrectAnswerForFeedback(question: QuizQuestion): string {
+function formatCorrectAnswerForFeedback(question: QuizQuestionData): string {
   if (question.question_type === 'text') return question.correct_answer;
   if (question.question_type === 'multiple-choice' || question.question_type === 'checkbox')
     return question.correct_answer.join(', ');
@@ -135,7 +65,7 @@ function formatCorrectAnswerForFeedback(question: QuizQuestion): string {
   return '—';
 }
 
-function formatAnswerForFeedback(question: QuizQuestion, state: QuestionState): string {
+function formatAnswerForFeedback(question: QuizQuestionData, state: QuestionState): string {
   const as = state.answerState;
   if (as.type === 'text') return as.userAnswer || 'No answer';
   if (as.type === 'multiple-choice' || as.type === 'checkbox')
@@ -178,16 +108,8 @@ function renderMarkdown(text: string): React.ReactElement {
   return <>{elements}</>;
 }
 
-interface StandardFeedback {
-  scoreMessage: string;
-  scoreEmoji: string;
-  slowQuestions: { text: string; seconds: number }[];
-  byTopic: { topic: string; correct: number; total: number }[];
-  mostMissed: { text: string; attempts: number } | null;
-}
-
 function computeStandardFeedback(
-  questions: QuizQuestion[],
+  questions: QuizQuestionData[],
   states: QuestionState[]
 ): StandardFeedback {
   const score = states.filter(s => s.isCorrect).length / questions.length * 100;
@@ -590,7 +512,7 @@ export default function QuizPage() {
     return false;
   };
 
-  function calculateScore(questions: QuizQuestion[], states: QuestionState[]) {
+  function calculateScore(questions: QuizQuestionData[], states: QuestionState[]) {
     const correct = states.filter(s => s.isCorrect).length;
     const total = questions.length;
     return {
@@ -760,7 +682,7 @@ export default function QuizPage() {
     }
   };
 
-  const gradeQuestion = (question: QuizQuestion, state: QuestionState): boolean => {
+  const gradeQuestion = (question: QuizQuestionData, state: QuestionState): boolean => {
     if (question.question_type === 'graph_feature' && state.answerState.type === 'graph_feature') {
       const gf = normaliseGraphFeatureData(question.correct_answer);
       if (!gf) return false;

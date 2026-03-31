@@ -4,13 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
-
-interface UserProfile {
-  id: string;
-  username: string;
-  email: string;
-  role: string;
-}
+import { UserProfile } from "@/lib/types/profile";
 
 export default function AdminDashboard() {
   const router = useRouter();

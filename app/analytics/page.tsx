@@ -9,24 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts';
-
-// ── Types & Helpers
-interface RawRecord {
-  user_id: string;
-  username: string;
-  correct: boolean;
-  time_spent: number;
-  quiz_id: string;
-  quiz_title: string;
-  module: string;
-  question_id: string;
-  question_text: string;
-  question_topic: string;
-}
-
-type SortKey = 'average_score' | 'error_rate' | 'total_attempts' | 'avg_time';
-type SortDir = 'asc' | 'desc';
-type ViewMode = 'student' | 'module' | 'quiz' | 'topic' | 'question';
+import { SortKey, RawRecord, SortDir, ViewMode } from "@/lib/types/analytics";
 
 const ALL_VIEW_MODES = [
   { key: 'student',  label: 'By Student' },

@@ -4,27 +4,9 @@ import OpenAI from 'openai';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { checkRateLimit } from '@/lib/utility/rateLimit';
 import { sanitizePromptInput, untrusted } from '@/lib/utility/sanitizePromptInput';
+import { GenerateQuizPayload, GenerateQuizResponse } from '@/lib/types/quiz';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-export interface GenerateQuizPayload {
-  title: string;
-  module: string;
-  description?: string;
-  maxQuestions?: number;
-  questions: {
-    id: string;
-    type: string;
-    question: string;
-    topic?: string;
-    options?: string[];
-  }[];
-}
-
-export interface GenerateQuizResponse {
-  selectedIds: string[];
-  reasoning: string;
-}
 
 function buildPrompt(payload: GenerateQuizPayload): string {
   const limit = payload.maxQuestions ?? 10;

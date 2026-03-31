@@ -7,21 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { ArrowLeft } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-
-interface Quiz {
-  id: string;
-  title: string;
-  description: string;
-  module: string;
-  questions: any[];
-  created_at?: string;
-}
+import { QuizData } from "@/lib/types/quiz";
 
 function HomeContent({ selectedModule }: { selectedModule: string | null }) {
   const router = useRouter();
   const { user } = useAuth();
 
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizData[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 

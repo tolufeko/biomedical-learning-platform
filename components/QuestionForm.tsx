@@ -4,47 +4,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import AIFeedbackSuggester from '@/components/AIFeedbackSuggester';
 import { evaluateExpr } from '@/lib/utility/evaluateExpr';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface QuestionInput {
-  type: string;
-  question: string;
-  options: string[];
-  correctAnswer: string | string[] | Hotspot[] | GraphFeatureData;
-  image_path?: string;
-  question_topic?: string;
-  question_feedback?: string;
-}
-
-interface Hotspot {
-  x: number;
-  y: number;
-}
-
-// ── Graph Feature ─────────────────────────────────────────────────────────────
-interface FeatureAnswer {
-  id: string;
-  x: number | '';
-  y: number | '';
-}
-
-interface EquationEntry {
-  id: string;
-  expr: string;
-  color: string;
-}
-
-interface GraphFeatureData {
-  equations: EquationEntry[];
-  xLabel?: string;
-  yLabel?: string;
-  xMin: number; xMax: number;
-  yMin: number; yMax: number;
-  features: FeatureAnswer[];
-}
+import { EquationEntry, FeatureAnswer } from '@/lib/types/answers';
+import { GraphFeatureData } from '@/lib/types/graph';
+import { Hotspot, QuestionFormProps, LocalQuestion, QuestionInput } from '@/lib/types/quiz';
 
 const EQUATION_COLORS = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#06b6d4'];
 
@@ -68,34 +30,6 @@ const newFeatureRow = (): FeatureAnswer => ({
   x: '',
   y: '',
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface QuestionFormProps {
-  onFormSubmit?: (formData: { title: string; questions: QuestionInput[]; description?: string; module: string }) => void;
-  initialData?: {
-    id?: string;
-    title: string;
-    module: string;
-    description: string;
-    questions: any[];
-  };
-  isEditing?: boolean;
-}
-
-interface LocalQuestion {
-  id: string;
-  type: string;
-  question: string;
-  options: string[];
-  correctAnswer: string | string[] | Hotspot[] | GraphFeatureData;
-  image_url?: string;
-  imageFile?: File | null;
-  filePath?: string;
-  graphFeatureData?: GraphFeatureData;
-  question_topic?: string;
-  question_feedback?: string;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPE GUARDS

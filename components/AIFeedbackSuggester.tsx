@@ -1,18 +1,8 @@
 // components/AIFeedbackSuggester.tsx
 'use client';
 
+import { AIFeedbackSuggesterProps } from '@/lib/types/feedback';
 import { useState, useRef, useCallback } from 'react';
-
-interface AIFeedbackSuggesterProps {
-  questionText: string;
-  questionType: string;
-  options?: string[];
-  correctAnswer: string | string[];
-  quizTitle?: string;
-  questionTopic?: string;
-  currentFeedback?: string;
-  onAccept: (feedback: string) => void;
-}
 
 type PanelState = 'idle' | 'loading' | 'reviewing' | 'error';
 

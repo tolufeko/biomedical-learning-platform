@@ -3,17 +3,9 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { checkRateLimit } from '@/lib/utility/rateLimit';
+import { QuestionFeedbackPayload } from '@/lib/types/feedback';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-export interface QuestionFeedbackPayload {
-  questionText: string;
-  questionType: string;
-  options?: string[];
-  correctAnswer: string | string[];
-  quizTitle?: string;
-  questionTopic?: string;
-}
 
 function buildPrompt(payload: QuestionFeedbackPayload): string {
   const optionsText =

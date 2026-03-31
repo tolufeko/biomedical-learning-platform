@@ -8,45 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
 import { shapeQuestion } from '@/lib/utility/transformQuiz';
-
-// =============== TYPES ===============
-interface HotspotAnswer { x: number; y: number; }
-type QuestionCorrectAnswer = string | string[] | HotspotAnswer[];
-
-interface QuizQuestion {
-  id: string;
-  question_type: string;
-  question_text: string;
-  options: string[];
-  correct_answer: QuestionCorrectAnswer;
-  display_order: number;
-  image_path?: string;
-  image_url?: string;
-  question_topic?: string;
-  question_feedback?: string;
-}
-
-interface Quiz {
-  id: string;
-  title: string;
-  description?: string;
-  questions: QuizQuestion[];
-  created_at: string;
-  updated_at: string;
-  user_id: string;
-  module: string;
-}
+import { QuizData } from '@/lib/types/quiz';
 
 export default function TeacherPage() {
   const router = useRouter();
   const { role, user } = useAuth();
 
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizData[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [formSearchTerm, setFormSearchTerm] = useState("");
   const [formsLoading, setFormsLoading] = useState(false);
-  const [editingForm, setEditingForm] = useState<Quiz | null>(null);
+  const [editingForm, setEditingForm] = useState<QuizData | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [resetFormKey, setResetFormKey] = useState(0);
   const [showCreateForm, setShowCreateForm] = useState(false);

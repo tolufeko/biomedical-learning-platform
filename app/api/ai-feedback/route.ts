@@ -4,23 +4,9 @@ import OpenAI from 'openai';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { checkRateLimit } from '@/lib/utility/rateLimit';
 import { sanitizePromptInput, untrusted } from '@/lib/utility/sanitizePromptInput';
+import { QuizFeedbackPayload } from '@/lib/types/feedback';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-export interface QuizFeedbackQuestion {
-  questionText: string;
-  questionType: string;
-  correct: boolean;
-  userAnswer: string;
-  correctAnswer: string;
-  timeSpent: number;
-}
-
-export interface QuizFeedbackPayload {
-  quizTitle: string;
-  score: number;
-  questions: QuizFeedbackQuestion[];
-}
 
 function buildPrompt(payload: QuizFeedbackPayload): string {
   const incorrectQuestions = payload.questions.filter(q => !q.correct);
