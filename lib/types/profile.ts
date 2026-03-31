@@ -5,3 +5,5 @@ export interface UserProfile {
     email: string;
     role: string;
 }
+
+export type UserRole = 'student' | 'teacher' | 'admin'| 'guest';

@@ -5,13 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import type { User } from '@supabase/supabase-js';
-
-type UserRole = 'student' | 'teacher' | 'admin'| 'guest';
-
-interface Profile {
-  username: string | null;
-  role: UserRole | null;
-}
+import { UserRole } from '@/lib/constants/roles';
+import { UserProfile } from '@/lib/types/profile';
 
 // ─── Nav link config ──────────────────────────────────────────────────────────
 
@@ -44,8 +39,8 @@ function getNavLinks(role: UserRole | null, pathname: string) {
 // ─── UserMenu ─────────────────────────────────────────────────────────────────
 
 function UserMenu({ user, profile, onSignOut }: {
-  user: User;           // ✅ Typed properly
-  profile: Profile | null;
+  user: User;           
+  profile: UserProfile | null;
   onSignOut: () => Promise<void>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -108,7 +103,7 @@ function UserMenu({ user, profile, onSignOut }: {
 
 function MobileMenu({ user, profile, navLinks, onClose, onSignOut }: {
   user: User;           // ✅ Typed properly
-  profile: Profile | null;
+  profile: UserProfile | null;
   navLinks: { href: string; label: string }[];
   onClose: () => void;
   onSignOut: () => Promise<void>;
@@ -146,10 +141,15 @@ function MobileMenu({ user, profile, navLinks, onClose, onSignOut }: {
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, role, username, loading, logout } = useAuth(); // ✅ Single source of truth
+  const { user, role, username, loading, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const profile: Profile | null = user ? { username, role } : null;
+  const profile: UserProfile | null = user ? {
+    id: user.id,
+    email: user.email ?? '',
+    username,
+    role: role ?? 'guest',
+  } : null;
 
   // ✅ Replaces the 60-line switch/if-else chain
   const navLinks = useMemo(
