@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { getUserRole } from '@/lib/auth/permissions';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
-import { shapeQuestion } from '@/lib/utility/quizTransform';
+import { shapeQuestion } from '@/lib/utility/transformQuiz';
 import type { QuizQuestionRaw } from '@/lib/types/quiz';
-import { putQuizBodySchema } from '@/lib/utility/quizSchemas';
+import { putQuizBodySchema } from '@/lib/utility/validateQuizSchemas';
 
 const supabaseAdmin = supabaseServer();
 

@@ -1,4 +1,4 @@
-// lib/utility/quizSchemas.ts
+// lib/utility/validateQuizSchemas.ts
 import { z } from 'zod';
 
 const MAX_TEXT_LENGTH = 2000;

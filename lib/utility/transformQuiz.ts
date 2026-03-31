@@ -1,4 +1,4 @@
-// lib/utility/quizTransform.ts
+// lib/utility/transformQuiz.ts
 import type { QuizQuestionRaw, QuizQuestionShaped } from '@/lib/types/quiz';
 
 export function shapeQuestion(q: QuizQuestionRaw): QuizQuestionShaped {

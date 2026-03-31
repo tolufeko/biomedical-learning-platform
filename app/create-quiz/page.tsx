@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import QuestionForm from "@/components/QuestionForm";
-import { shapeQuestion } from '@/lib/utility/quizTransform';
+import { shapeQuestion } from '@/lib/utility/transformQuiz';
 
 // =============== TYPES ===============
 interface HotspotAnswer { x: number; y: number; }
