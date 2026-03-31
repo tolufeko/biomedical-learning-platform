@@ -1,5 +1,6 @@
 // app/api/refresh-image/route.ts
 import { type NextRequest, NextResponse } from 'next/server';
+import path from 'path';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
@@ -16,13 +17,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Valid filePath is required' }, { status: 400 });
     }
 
-    if (!filePath.startsWith('uploads/quiz-')) {
+    // Normalise to resolve any ../ sequences, then strip any leading slash
+    const normalised = path.posix.normalize(filePath).replace(/^\/+/, '');
+
+    if (!normalised.startsWith('uploads/quiz-')) {
       return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
     }
 
     const { data, error } = await supabaseAdmin.storage
       .from('quiz-images')
-      .createSignedUrl(filePath, 3600);
+      .createSignedUrl(normalised, 3600);
 
     if (error || !data?.signedUrl) {
       console.error('Failed to refresh signed URL:', error);

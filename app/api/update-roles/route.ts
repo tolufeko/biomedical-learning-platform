@@ -40,7 +40,15 @@ export async function PUT(request: Request) {
     const role = await getUserRole(user.id);
     if (role !== 'admin') return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
 
-    const { role: newRole } = await request.json();
+    const { role: newRole, userId: targetId } = await request.json();
+
+    if (!targetId || typeof targetId !== 'string') {
+      return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+    }
+
+    if (targetId === user.id) {
+      return NextResponse.json({ error: 'You cannot change your own role.' }, { status: 400 });
+    }
 
     if (!newRole) return NextResponse.json({ error: 'role is required' }, { status: 400 });
     if (!isValidRole(newRole)) {
@@ -50,7 +58,11 @@ export async function PUT(request: Request) {
       );
     }
 
-    const { error } = await supabaseAdmin.from('profiles').update({ role: newRole }).eq('id', user.id);
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ role: newRole })
+      .eq('id', targetId);
+
     if (error) throw error;
 
     return NextResponse.json({ success: true });

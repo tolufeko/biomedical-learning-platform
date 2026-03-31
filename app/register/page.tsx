@@ -28,58 +28,51 @@ export default function SignUpPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
-    // Validation
+  
     if (password !== confirmPassword) {
       alert("Passwords do not match!");
       setLoading(false);
       return;
     }
-
+  
     if (password.length < 8) {
       alert("Password must be at least 8 characters long.");
       setLoading(false);
       return;
     }
-
-    if (!username.trim()) {
-      alert("Please enter a username.");
-      setLoading(false);
-      return;
-    }
-
-    // Basic username validation
+  
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
       alert("Username must be 3-20 characters and contain only letters, numbers, and underscores.");
       setLoading(false);
       return;
     }
-
+  
     try {
-      const { data, error } = await supabase.auth.signUp({ 
-        email, 
-        password, 
-        options: { data: { username } } 
+      // Step 1: create the auth user (unchanged)
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { username } },
       });
       if (error) throw error;
       if (!data.user) throw new Error("User creation failed");
-    
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ id: data.user.id, username, role: 'student' });
-    
-      if (profileError) {
-        if (profileError.code === '23505') {
-          alert("Username is already taken.");
-        } else {
-          throw profileError;
-        }
+  
+      // Step 2: create the profile server-side (validated + insert instead of upsert)
+      const res = await fetch('/api/auth/create-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, role: 'student' }),
+      });
+  
+      const result = await res.json();
+  
+      if (!res.ok) {
+        alert(result.error || 'Registration failed');
         return;
       }
-    
+  
       alert("Registration successful! Please check your email to confirm.");
       router.push("/");
-    
     } catch (error: any) {
       console.error("Signup error:", error);
       alert("Registration failed: " + (error.message || "Unknown error"));

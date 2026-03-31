@@ -5,6 +5,7 @@ import { getUserRole } from '@/lib/auth/permissions';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
 import { shapeQuestion } from '@/lib/utility/quizTransform';
 import type { QuizQuestionRaw } from '@/lib/types/quiz';
+import { putQuizBodySchema } from '@/lib/utility/quizSchemas';
 
 const supabaseAdmin = supabaseServer();
 
@@ -135,7 +136,27 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden: You do not own this quiz' }, { status: 403 });
     }
 
-    const { title, module, description, questions } = await request.json();
+    // Parse raw body first, then validate
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const parsed = putQuizBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: 'Validation failed',
+          // Flattened errors are easier to consume on the client
+          details: parsed.error.flatten().fieldErrors,
+        },
+        { status: 422 }
+      );
+    }
+
+    const { title, module, description, questions } = parsed.data;
 
     if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     if (!module) return NextResponse.json({ error: 'Module is required' }, { status: 400 });
