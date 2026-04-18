@@ -18,9 +18,7 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
-    if (user) {
-      router.push("/home");
-    }
+    if (user) router.push("/home");
   }, [user, router]);
 
   if (user) return null;
@@ -34,38 +32,28 @@ export default function SignUpPage() {
       setLoading(false);
       return;
     }
-    
+
     try {
-      // create the auth user
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { username } },
-      });
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
-      if (!data.user) throw new Error("User creation failed");
+      if (!data.user || !data.session) throw new Error("User creation failed");
 
-      const accessToken = data.session?.access_token;
-
-      // create the profile server-side
       const res = await fetch("/api/create-profile", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          Authorization: `Bearer ${data.session.access_token}`,
         },
         body: JSON.stringify({ username, role: "student" }),
       });
 
       const result = await res.json();
-
       if (!res.ok) {
         alert(result.error || "Registration failed");
         return;
       }
 
-      alert("Registration successful! Please check your email to confirm.");
-      router.push("/");
+      router.push("/home");
     } catch (error: any) {
       console.error("Signup error:", error);
       alert("Registration failed: " + (error.message || "Unknown error"));

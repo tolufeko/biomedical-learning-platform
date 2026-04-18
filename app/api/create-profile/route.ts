@@ -1,22 +1,15 @@
 // app/api/create-profile/route.ts
 import { NextResponse } from 'next/server';
-import { getServerUser } from '@/lib/auth/getServerUser';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
 const supabaseAdmin = supabaseServer();
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 async function resolveUser(request: Request) {
-  let user = await getServerUser();
-  if (user) return user;
-  const authHeader = request.headers.get('Authorization');
-  const token = authHeader?.replace('Bearer ', '').trim();
-  if (token) {
-    const { data } = await supabaseAdmin.auth.getUser(token);
-    user = data.user ?? null;
-  }
-
-  return user;
+  const token = request.headers.get('Authorization')?.replace('Bearer ', '').trim();
+  if (!token) return null;
+  const { data } = await supabaseAdmin.auth.getUser(token);
+  return data.user ?? null;
 }
 
 export async function POST(request: Request) {
@@ -26,26 +19,25 @@ export async function POST(request: Request) {
   const { username, role = 'student' } = await request.json();
 
   if (typeof username !== 'string' || !USERNAME_REGEX.test(username)) {
-    return NextResponse.json({ error: 'Username must be 3-20 characters and contain only letters, numbers, and underscores.' }, { status: 422 });
+    return NextResponse.json(
+      { error: 'Username must be 3-20 characters and contain only letters, numbers, and underscores.' },
+      { status: 422 }
+    );
   }
 
-  // Check username availability
-  const { data: existingUsername } = await supabaseAdmin
+  const { data: taken } = await supabaseAdmin
     .from('profiles')
     .select('id')
     .eq('username', username)
     .maybeSingle();
 
-  if (existingUsername) {
+  if (taken) {
     return NextResponse.json({ error: 'Username is already taken.' }, { status: 409 });
   }
 
   const { error } = await supabaseAdmin
     .from('profiles')
-    .upsert(
-      { id: user.id, username, role },
-      { onConflict: 'id' }
-    );
+    .upsert({ id: user.id, username, role }, { onConflict: 'id' });
 
   if (error) {
     if (error.code === '23505' && error.message.includes('username')) {
@@ -56,4 +48,21 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ success: true }, { status: 201 });
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const username = searchParams.get('username');
+
+  if (!username || !USERNAME_REGEX.test(username)) {
+    return NextResponse.json({ available: false }, { status: 400 });
+  }
+
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('username', username)
+    .maybeSingle();
+
+  return NextResponse.json({ available: !data });
 }
