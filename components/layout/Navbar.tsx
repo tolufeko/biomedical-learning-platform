@@ -79,14 +79,6 @@ function UserMenu({ user, profile, onSignOut }: {
             </p>
           </div>
 
-          <Link
-            href="/update-password"
-            className="block px-4 py-2 text-gray-700 hover:bg-gray-50"
-            onClick={() => setIsOpen(false)}
-          >
-            Change Password
-          </Link>
-
           <button
             onClick={async () => { setIsOpen(false); await onSignOut(); }}
             className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
@@ -102,7 +94,7 @@ function UserMenu({ user, profile, onSignOut }: {
 // ─── MobileMenu ───────────────────────────────────────────────────────────────
 
 function MobileMenu({ user, profile, navLinks, onClose, onSignOut }: {
-  user: User;           // ✅ Typed properly
+  user: User; 
   profile: UserProfile | null;
   navLinks: { href: string; label: string }[];
   onClose: () => void;
