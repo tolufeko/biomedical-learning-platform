@@ -57,20 +57,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ success: true }, { status: 201 });
 }
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const username = searchParams.get('username');
-
-  if (!username || !USERNAME_REGEX.test(username)) {
-    return NextResponse.json({ available: false }, { status: 400 });
-  }
-
-  const { data } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('username', username)
-    .maybeSingle();
-
-  return NextResponse.json({ available: !data });
-}
