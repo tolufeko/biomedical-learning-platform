@@ -28,27 +28,15 @@ export default function SignUpPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-  
+
     if (password !== confirmPassword) {
       alert("Passwords do not match!");
       setLoading(false);
       return;
     }
-  
-    if (password.length < 8) {
-      alert("Password must be at least 8 characters long.");
-      setLoading(false);
-      return;
-    }
-  
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-      alert("Username must be 3-20 characters and contain only letters, numbers, and underscores.");
-      setLoading(false);
-      return;
-    }
-  
+    
     try {
-      // Step 1: create the auth user (unchanged)
+      // create the auth user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -56,21 +44,26 @@ export default function SignUpPage() {
       });
       if (error) throw error;
       if (!data.user) throw new Error("User creation failed");
-  
-      // Step 2: create the profile server-side (validated + insert instead of upsert)
-      const res = await fetch('/api/create-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, role: 'student' }),
+
+      const accessToken = data.session?.access_token;
+
+      // create the profile server-side
+      const res = await fetch("/api/create-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ username, role: "student" }),
       });
-  
+
       const result = await res.json();
-  
+
       if (!res.ok) {
-        alert(result.error || 'Registration failed');
+        alert(result.error || "Registration failed");
         return;
       }
-  
+
       alert("Registration successful! Please check your email to confirm.");
       router.push("/");
     } catch (error: any) {
@@ -133,9 +126,7 @@ export default function SignUpPage() {
               className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              At least 8 characters
-            </p>
+            <p className="text-xs text-gray-500 mt-1">At least 8 characters</p>
           </div>
 
           <div>
@@ -164,14 +155,14 @@ export default function SignUpPage() {
             {loading ? "Creating Account..." : "Register"}
           </button>
         </form>
-        
+
         <p className="text-sm text-center text-gray-600 mt-4">
           Are you a teacher?{" "}
           <Link href="/register-teacher" className="text-blue-600 hover:underline">
             Register
           </Link>
         </p>
-        
+
         <p className="text-sm text-center text-gray-600 mt-2">
           Already have an account?{" "}
           <Link href="/" className="text-blue-600 hover:underline font-medium">
