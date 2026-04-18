@@ -1,4 +1,4 @@
-// app/api/auth/create-profile/route.ts
+// app/api/create-profile/route.ts
 import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';

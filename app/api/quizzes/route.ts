@@ -1,3 +1,4 @@
+// app/api/quizzes/route.ts
 import { NextResponse } from 'next/server';
 import { getServerUser } from '@/lib/auth/getServerUser';
 import { supabaseServer } from '@/lib/supabase/supabaseServer';

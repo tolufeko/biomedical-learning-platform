@@ -58,7 +58,7 @@ export default function SignUpPage() {
       if (!data.user) throw new Error("User creation failed");
   
       // Step 2: create the profile server-side (validated + insert instead of upsert)
-      const res = await fetch('/api/auth/create-profile', {
+      const res = await fetch('/api/create-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, role: 'student' }),
