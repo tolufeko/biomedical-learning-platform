@@ -5,7 +5,6 @@ import { supabaseServer } from '@/lib/supabase/supabaseServer';
 
 const supabaseAdmin = supabaseServer();
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
-const VALID_ROLES = ['student', 'teacher'] as const;
 
 export async function POST(request: Request) {
   const user = await getServerUser();
@@ -15,10 +14,6 @@ export async function POST(request: Request) {
 
   if (typeof username !== 'string' || !USERNAME_REGEX.test(username)) {
     return NextResponse.json({ error: 'Invalid username.' }, { status: 422 });
-  }
-
-  if (!VALID_ROLES.includes(role)) {
-    return NextResponse.json({ error: 'Invalid role.' }, { status: 422 });
   }
 
   const { error } = await supabaseAdmin

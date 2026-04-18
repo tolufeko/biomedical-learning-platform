@@ -99,7 +99,7 @@ export default function SignUpPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
               className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. toluwani"
+              placeholder="e.g. bobby123"
             />
             <p className="text-xs text-gray-500 mt-1">
               3-20 characters, letters, numbers, and underscores only
