@@ -50,19 +50,38 @@ export async function POST(request: Request) {
   return NextResponse.json({ success: true }, { status: 201 });
 }
 
+// app/api/create-profile/route.ts
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const username = searchParams.get('username');
+  const password = searchParams.get('password');
+  const confirmPassword = searchParams.get('confirmPassword');
 
-  if (!username || !USERNAME_REGEX.test(username)) {
-    return NextResponse.json({ available: false }, { status: 400 });
+  if (password !== confirmPassword) {
+    return NextResponse.json({ error: 'Passwords do not match.' }, { status: 422 });
   }
 
-  const { data } = await supabaseAdmin
+  if (password.length < 8) {
+    return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 422 });
+  }
+
+  if (!username || !USERNAME_REGEX.test(username)) {
+    return NextResponse.json(
+      { error: 'Username must be 3-20 characters and contain only letters, numbers, and underscores.' },
+      { status: 422 }
+    );
+  }
+
+  const { data: taken } = await supabaseAdmin
     .from('profiles')
     .select('id')
     .eq('username', username)
     .maybeSingle();
 
-  return NextResponse.json({ available: !data });
+  if (taken) {
+    return NextResponse.json({ error: 'Username is already taken.' }, { status: 409 });
+  }
+
+  return NextResponse.json({ valid: true });
 }

@@ -26,18 +26,21 @@ export default function SignUpPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
-    if (password !== confirmPassword) {
-      alert("Passwords do not match!");
-      setLoading(false);
-      return;
-    }
-
+  
     try {
+      const params = new URLSearchParams({ username, password, confirmPassword });
+      const check = await fetch(`/api/create-profile?${params}`);
+      const result = await check.json();
+      
+      if (!check.ok) {
+        alert(result.error);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
       if (!data.user || !data.session) throw new Error("User creation failed");
-
+  
       const res = await fetch("/api/create-profile", {
         method: "POST",
         headers: {
@@ -46,13 +49,14 @@ export default function SignUpPage() {
         },
         body: JSON.stringify({ username, role: "student" }),
       });
-
-      const result = await res.json();
+  
+      const profileResult = await res.json();
       if (!res.ok) {
-        alert(result.error || "Registration failed");
+        await supabase.auth.signOut();
+        alert(profileResult.error || "Registration failed");
         return;
       }
-
+  
       router.push("/home");
     } catch (error: any) {
       console.error("Signup error:", error);
