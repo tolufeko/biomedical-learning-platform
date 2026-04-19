@@ -144,13 +144,6 @@ export default function SignUpPage() {
           </button>
         </form>
 
-        <p className="text-sm text-center text-gray-600 mt-4">
-          Are you a teacher?{" "}
-          <Link href="/register-teacher" className="text-blue-600 hover:underline">
-            Register
-          </Link>
-        </p>
-
         <p className="text-sm text-center text-gray-600 mt-2">
           Already have an account?{" "}
           <Link href="/" className="text-blue-600 hover:underline font-medium">
