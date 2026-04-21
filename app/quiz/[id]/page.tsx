@@ -1122,6 +1122,7 @@ export default function QuizPage() {
                 {/* Text */}
                 {currentQuestion.question_type === 'text' && (
                   <div className="mb-6">
+                    <label htmlFor="text-answer" className="sr-only">Your answer</label>
                     <input
                       type="text"
                       value={currentQuestionState?.answerState.type === 'text' ? currentQuestionState.answerState.userAnswer || '' : ''}
