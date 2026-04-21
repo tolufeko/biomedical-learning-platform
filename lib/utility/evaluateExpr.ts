@@ -1,3 +1,4 @@
+// lib/utility/evaluateExpr.ts
 import { evaluate } from 'mathjs';
 
 export function evaluateExpr(expr: string, x: number): number | null {

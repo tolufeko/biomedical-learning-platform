@@ -15,17 +15,16 @@ function buildPrompt(payload: QuizFeedbackPayload): string {
     .sort((a, b) => b.timeSpent - a.timeSpent)
     .slice(0, 3);
 
-  // Sanitise the quiz title (high risk: free-text, user-supplied).
+  // Sanitise the quiz title
   const safeTitle = untrusted(payload.quizTitle, 200);
 
   const questionBreakdown = payload.questions
     .map((q, i) => {
-      // timeSpent must be a non-negative integer — coerce before interpolating.
+      // timeSpent must be a non-negative integer
       const safeTime = Math.max(0, Math.floor(Number(q.timeSpent) || 0));
       const flag = safeTime > 60 ? ` [took ${safeTime}s]` : '';
 
-      // questionType is an enum-like value; sanitise but don't wrap — it's
-      // structural metadata, not free-text content.
+      // questionType is an enum like value; sanitise
       const safeType = sanitizePromptInput(q.questionType, 50);
 
       return [
@@ -37,7 +36,7 @@ function buildPrompt(payload: QuizFeedbackPayload): string {
     })
     .join('\n\n');
 
-  // Build the slow-questions note using sanitised question text.
+  // Build the slow questions note using sanitised question text
   const slowNote =
     slowQuestions.length > 0
       ? `Also note that they spent a long time on: ${slowQuestions
@@ -45,7 +44,7 @@ function buildPrompt(payload: QuizFeedbackPayload): string {
           .join(', ')} — suggest why this might be and how to build confidence with that type of question.`
       : '';
 
-  // score is validated as a number in the handler; clamp defensively here.
+  // score is validated as a number in the handler
   const safeScore = Math.min(100, Math.max(0, Math.round(Number(payload.score) || 0)));
 
   return `You are an expert, encouraging tutor providing personalised feedback to a student.

@@ -50,8 +50,6 @@ export async function POST(request: Request) {
   return NextResponse.json({ success: true }, { status: 201 });
 }
 
-// app/api/create-profile/route.ts
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const username = searchParams.get('username');

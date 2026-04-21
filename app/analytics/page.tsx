@@ -64,8 +64,6 @@ function applySort(data: any[], sortKey: SortKey, sortDir: SortDir): any[] {
   return [...data].sort((a, b) => sortDir === 'asc' ? a[sortKey] - b[sortKey] : b[sortKey] - a[sortKey]);
 }
 
-// ── Components ─────────────────────────────────────────────────────────────
-
 function FilterSelect({
   label, value, onChange, options,
 }: {
@@ -328,7 +326,6 @@ function useGroupState() {
   return { search, setSearch, sortKey, setSortKey, sortDir, setSortDir };
 }
 
-// ── Main Page Component ───────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const router = useRouter();
   const { user, role } = useAuth();
@@ -470,7 +467,6 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        {/* Unified Container Box for Navigation & Content */}
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
           
           {/* Navigation Tab Bar */}
@@ -492,7 +488,6 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {/* Dynamic Content Area */}
           <div className="p-6">
             {renderContent()}
           </div>

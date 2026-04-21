@@ -112,7 +112,6 @@ export default function AIFeedbackSuggester({
     setEditedSuggestion(suggestion);
   };
 
-  // ── Idle / trigger button ──────────────────────────────────────────────────
   if (panelState === 'idle') {
     return (
       <button
@@ -140,10 +139,8 @@ export default function AIFeedbackSuggester({
     );
   }
 
-  // ── Loading / streaming / reviewing / error panel ──────────────────────────
   return (
     <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 shadow-sm overflow-hidden">
-      {/* Panel header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-violet-100 border-b border-violet-200">
         <div className="flex items-center gap-2">
           <SparkleIcon className="text-violet-600" />
@@ -193,14 +190,14 @@ export default function AIFeedbackSuggester({
             </p>
           )}
 
-          {/* Verification notice */}
+          {/* Verification */}
           <p className="mt-2 text-xs text-violet-500 italic">
             ✦ Review this suggestion carefully before accepting — AI can make mistakes.
           </p>
         </div>
       )}
 
-      {/* Action bar — only shown when fully streamed */}
+      {/* Action bar */}
       {panelState === 'reviewing' && (
         <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-violet-200 bg-white">
           <div className="flex gap-2">
@@ -252,8 +249,6 @@ export default function AIFeedbackSuggester({
     </div>
   );
 }
-
-// ── Tiny inline SVG icons ─────────────────────────────────────────────────────
 
 function SparkleIcon({ className = '' }: { className?: string }) {
   return (

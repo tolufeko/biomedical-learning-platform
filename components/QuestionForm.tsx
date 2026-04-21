@@ -31,10 +31,6 @@ const newFeatureRow = (): FeatureAnswer => ({
   y: '',
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPE GUARDS
-// ─────────────────────────────────────────────────────────────────────────────
-
 const isStringArray = (arr: any[]): arr is string[] =>
   Array.isArray(arr) && arr.every(item => typeof item === 'string');
 
@@ -47,7 +43,6 @@ const isHotspotArray = (arr: any[]): arr is Hotspot[] =>
 const isGraphFeatureData = (val: any): val is GraphFeatureData =>
   val !== null && typeof val === 'object' && 'equations' in val && 'features' in val;
 
-// Migrate quizzes saved with old single-equation shape
 function normaliseGF(raw: any): GraphFeatureData {
   if (!raw) return DEFAULT_GRAPH_DATA;
   if (!raw.equations && raw.equation !== undefined) {
@@ -57,10 +52,6 @@ function normaliseGF(raw: any): GraphFeatureData {
   const { graphType, imageUrl, equationColor, equation, ...rest } = raw;
   return rest as GraphFeatureData;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRAPH HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
 
 function parseEquationType(raw: string): { type: 'vertical'; xVal: number } | { type: 'horizontal'; yVal: number } | { type: 'function'; expr: string } {
   const s = raw.trim().replace(/\s/g, '');
@@ -115,10 +106,6 @@ function drawEquation(
   }
   ctx.stroke();
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRAPH PREVIEW CANVAS (teacher side)
-// ─────────────────────────────────────────────────────────────────────────────
 
 function GraphPreview({ data }: { data: GraphFeatureData }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -201,10 +188,6 @@ function GraphPreview({ data }: { data: GraphFeatureData }) {
     />
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRAPH FEATURE CREATOR (teacher-facing builder)
-// ─────────────────────────────────────────────────────────────────────────────
 
 function GraphFeatureCreator({
   value,
@@ -385,10 +368,6 @@ function GraphFeatureCreator({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN QuestionForm COMPONENT
-// ─────────────────────────────────────────────────────────────────────────────
-
 const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, isEditing = false }) => {
   const [formTitle, setFormTitle] = useState('');
   const [formModule, setFormModule] = useState('');
@@ -416,7 +395,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const [generateReasoning, setGenerateReasoning] = useState<string | null>(null);
   const [maxQuestions, setMaxQuestions] = useState<number>(10);
 
-  // ── Init from initialData ──────────────────────────────────────────────────
   useEffect(() => {
     if (initialData) {
       setFormTitle(initialData.title);
@@ -460,7 +438,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     }
   }, [initialData]);
 
-  // ── Question types ─────────────────────────────────────────────────────────
   const questionTypes = [
     { value: 'text',            label: 'Text' },
     { value: 'multiple-choice', label: 'Multiple Choice' },
@@ -468,7 +445,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     { value: 'graph_feature',   label: 'Graph' },
   ];
 
-  // ── Add / remove questions ─────────────────────────────────────────────────
   const addQuestion = () => {
     const newQ: LocalQuestion = {
       id: Date.now().toString(),
@@ -493,7 +469,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     setQuestions(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
   };
 
-  // ── Question type change — reset state cleanly ─────────────────────────────
   const handleTypeChange = (id: string, newType: string) => {
     setQuestions(questions.map(q => {
       if (q.id !== id) return q;
@@ -510,7 +485,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     }));
   };
 
-  // ── Options ────────────────────────────────────────────────────────────────
   const addOption = (questionId: string) => {
     setQuestions(questions.map(q =>
       q.id === questionId ? { ...q, options: [...q.options, ''] } : q
@@ -533,7 +507,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     ));
   };
 
-  // ── Answer handlers ────────────────────────────────────────────────────────
   const handleMultipleChoiceAnswerChange = (questionId: string, selected: string[]) => {
     setQuestions(questions.map(q => q.id === questionId ? { ...q, correctAnswer: selected } : q));
   };
@@ -554,7 +527,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     ));
   };
 
-  // ── Shared image upload ────────────────────────────────────────────────────
   const handleImageUpload = async (questionId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -605,7 +577,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
   const handleImageLoad = (id: string) => setImageLoadedStates(prev => ({ ...prev, [id]: true }));
   const handleImageLoadStart = (id: string) => setImageLoadedStates(prev => ({ ...prev, [id]: false }));
 
-  // ── Hotspot click handler ──────────────────────────────────────────────────
   const handleImageClick = (questionId: string, event: React.MouseEvent<HTMLDivElement>) => {
     const question = questions.find(q => q.id === questionId);
     if (!question?.image_url) return;
@@ -623,7 +594,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     handleHotspotAnswerChange(questionId, newHotspots);
   };
 
-  // ── Remove image ──────────────────────────────────────────────────────────
   const removeImage = (questionId: string) => {
     setQuestions(qs => qs.map(q => {
       if (q.id !== questionId) return q;
@@ -638,7 +608,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     setImageLoadedStates(prev => ({ ...prev, [questionId]: false }));
   };
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
   const goToNextQuestion = () => {
     if (currentQuestionIndex < questions.length - 1) setCurrentQuestionIndex(c => c + 1);
   };
@@ -649,7 +618,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     if (index >= 0 && index < questions.length) setCurrentQuestionIndex(index);
   };
 
-  // ── Question Bank ──────────────────────────────────────────────────────────
   const addQuestionFromBank = () => {
     setIsBankModalOpen(true);
     fetchQuestionBank();
@@ -729,7 +697,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     setGenerateReasoning(null);
 
     try {
-      // 1. Fetch the question bank if not already loaded
+      // Fetch the question bank if not already loaded
       let bank = questionBank;
       if (bank.length === 0) {
         const res = await fetch('/api/question-bank', { headers: { 'Content-Type': 'application/json' } });
@@ -744,7 +712,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         return;
       }
 
-      // 2. Ask AI to select relevant questions
+      // Ask AI to select relevant questions
       const res = await fetch('/api/ai-generate-quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -773,7 +741,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         return;
       }
 
-      // 3. Add selected questions to the form (same logic as handleSelectFromBank)
+      // Add selected questions to the form
       const toAdd: LocalQuestion[] = selectedIds
         .map((id: string) => bank.find((q: any) => q.id === id))
         .filter(Boolean)
@@ -811,7 +779,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
         return combined;
       });
 
-      // Navigate to the first newly added question
+      // Navigate to the first question
       setCurrentQuestionIndex(questions.length);
 
       // Show image load states for any questions with images
@@ -846,7 +814,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     [questionBank]
   );
 
-  // ── Validation ─────────────────────────────────────────────────────────────
   const validateQuestion = (question: LocalQuestion): string | null => {
     if (!question.question.trim()) return 'Question text is required';
     if (question.question.length > 1000) return 'Question text must be under 1000 characters';
@@ -886,7 +853,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     return null;
   };
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) { alert('Please enter a quiz title'); return; }
@@ -966,7 +932,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     }
   };
 
-  // ── Render helpers ─────────────────────────────────────────────────────────
   const renderQuestionOptions = (question: LocalQuestion) => {
     if (question.type !== 'multiple-choice') return null;
     return (
@@ -1239,7 +1204,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
     }
   };
 
-  // ── Helper: derive a serialisable correctAnswer string for the suggester ───
   const getCorrectAnswerForSuggester = (question: LocalQuestion): string | string[] => {
     if (question.type === 'graph_feature') {
       const gf = question.graphFeatureData;
@@ -1263,7 +1227,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
 
   const currentQuestion = questions[currentQuestionIndex];
 
-  // ── JSX ────────────────────────────────────────────────────────────────────
   return (
     <div className="form-container bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-6 text-center">
@@ -1407,7 +1370,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                 {renderQuestionOptions(currentQuestion)}
                 {renderCorrectAnswerField(currentQuestion)}
 
-                {/* ── Feedback + AI Suggester ───────────────────────────────── */}
+                {/* Feedback + AI Suggester */}
                 <div className="form-group">
                   <label className="block text-sm font-medium mb-2">Feedback:</label>
                   <input
@@ -1429,7 +1392,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
                   />
                 </div>
 
-                {/* Optional image — shown for all non-hotspot types */}
+                {/* Optional image */}
                 {renderOptionalImage(currentQuestion)}
               </div>
             </div>
@@ -1465,7 +1428,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             </button>
           </div>
           <div className="flex items-center gap-2">
-            {/* Max questions — always visible */}
+            {/* Max questions */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-lg">
               <label className="text-xs text-violet-700 font-medium whitespace-nowrap">Max questions:</label>
               <input
@@ -1514,7 +1477,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
           </div>
         </div>
 
-        {/* ── Question Bank Modal ──────────────────────────────────────────── */}
+        {/* Question Bank Modal */}
         {isBankModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col">

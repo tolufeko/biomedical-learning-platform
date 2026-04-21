@@ -8,6 +8,7 @@ const supabaseAdmin = supabaseServer();
 
 export async function POST(request: NextRequest) {
   try {
+    // validate users permisissions
     const user = await getServerUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 

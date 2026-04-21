@@ -47,7 +47,7 @@ export default function LoginPage() {
     router.push("/home");
   };
 
-  //  Supabase anonymous auth
+  //  Supabase anonymous auth to handle guest sign in
   const handleAnonymousLogin = async () => {
     setGuestLoading(true);
     

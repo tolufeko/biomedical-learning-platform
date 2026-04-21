@@ -7,8 +7,8 @@ import type { User, Session } from "@supabase/supabase-js";
 import type { UserRole } from "@/lib/constants/roles";
 
 interface AuthContextType {
-  user: User | null; // ✅ Typed with Supabase's User instead of any
-  role: UserRole | null; // ✅ Typed role
+  user: User | null;
+  role: UserRole | null;
   username: string | null;
   loading: boolean;
   refreshUser: () => Promise<void>;
@@ -24,14 +24,14 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
 });
 
-// ✅ Explicit guard instead of silent fallback to "student"
+// Explicit guard instead of silent fallback to "student"
 function parseRole(raw: string | null | undefined): UserRole | null {
   if (raw === "student" || raw === "teacher" || raw === "admin" || raw === "guest") return raw;
   return null;
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null); // ✅ No more any
+  const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(false);
   }, []);
 
-  const handleAuthSession = useCallback(async (session: Session) => { // ✅ Typed Session instead of any
+  const handleAuthSession = useCallback(async (session: Session) => {
     setLoading(true);
     const currentUser = session.user;
     setUser(currentUser);
@@ -56,16 +56,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .single();
 
       if (!error && profileData) {
-        setRole(parseRole(profileData.role)); // ✅ Validated, no silent fallback
+        setRole(parseRole(profileData.role)); 
         setUsername(profileData.username ?? null);
       } else {
-        // ✅ Unknown profile state: clear role rather than assume "student"
         setRole(null);
         setUsername(null);
       }
     } catch (err) {
       console.error("Failed to fetch profile:", err);
-      setRole(null); // ✅ Same here — don't grant a role on error
+      setRole(null);
       setUsername(null);
     } finally {
       setLoading(false);
@@ -74,8 +73,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchUser = useCallback(async () => {
     setLoading(true);
-
-    // ✅ getUser() instead of getSession() — cryptographically verified server-side
     const { data: { user: verifiedUser }, error } = await supabase.auth.getUser();
 
     if (error || !verifiedUser) {
@@ -83,8 +80,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // getUser() doesn't return a full Session object, so we build
-    // what handleAuthSession actually needs: just session.user
     await handleAuthSession({ user: verifiedUser } as Session);
   }, [clearAuthState, handleAuthSession]);
 
@@ -102,7 +97,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        handleAuthSession(session); // ✅ session here IS a full Session — safe to pass
+        handleAuthSession(session);
       } else {
         clearAuthState();
       }

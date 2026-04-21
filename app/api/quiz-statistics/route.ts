@@ -32,7 +32,7 @@ export async function GET() {
 
     const records = (data || []).filter(r => r.question_assignments);
 
-    // Fetch usernames for privileged users
+    // Fetch usernames for teachers and admins
     let usernameMap: Record<string, string> = {};
     if (isPrivileged) {
       const userIds = [...new Set(records.map(r => r.user_id))];
@@ -41,7 +41,6 @@ export async function GET() {
       usernameMap = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
     }
 
-    // Build enriched flat records
     const enriched = records.map(r => {
       const qa = r.question_assignments as any;
       return {

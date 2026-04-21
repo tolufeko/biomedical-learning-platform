@@ -10,7 +10,6 @@ export default function HelpPage() {
   const router = useRouter();
   const { user, role } = useAuth();
 
-  // Access check
   useEffect(() => {
     if (!user) {
       router.push("/");
@@ -19,7 +18,6 @@ export default function HelpPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* Help content */}
       <div className="flex flex-col items-center mt-16 px-6">
         <h2 className="text-3xl font-semibold mb-4">Help & Support</h2>
         <p className="text-gray-700 mb-6 text-center">
@@ -32,7 +30,7 @@ export default function HelpPage() {
             <ul className="list-disc ml-6 text-gray-700">
               <li>Navigate through revision modules using the navigation bar.</li>
               <li>Access quizzes, diagrams, animations, and topic summaries.</li>
-              <li>Your progress is automatically saved.</li>
+              <li>Your progress is automatically saved if you are logged in.</li>
             </ul>
           </section>
 

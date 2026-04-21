@@ -136,7 +136,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden: You do not own this quiz' }, { status: 403 });
     }
 
-    // Parse raw body first, then validate
+    // Parse raw body first then validate
     let rawBody: unknown;
     try {
       rawBody = await request.json();
@@ -149,7 +149,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json(
         {
           error: 'Validation failed',
-          // Flattened errors are easier to consume on the client
           details: parsed.error.flatten().fieldErrors,
         },
         { status: 422 }

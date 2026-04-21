@@ -34,6 +34,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    // validate users permisissions
     const user = await getServerUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized: Login required' }, { status: 401 });
 

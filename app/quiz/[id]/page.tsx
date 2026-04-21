@@ -31,8 +31,6 @@ function normaliseGraphFeatureData(raw: any): GraphFeatureData {
   return { ...rest } as GraphFeatureData;
 }
 
-// =============== FEEDBACK HELPERS ===============
-
 function makeInitialAnswerState(q: QuizQuestionData): AnswerState {
   switch (q.question_type) {
     case 'multiple-choice':
@@ -151,8 +149,6 @@ function computeStandardFeedback(
 
   return { scoreMessage, scoreEmoji, slowQuestions, byTopic, mostMissed };
 }
-
-// =============== GRAPH HELPERS ===============
 
 function parseEquationType(raw: string): { type: 'vertical'; xVal: number } | { type: 'horizontal'; yVal: number } | { type: 'function'; expr: string } {
   const s = raw.trim().replace(/\s/g, '');
@@ -443,9 +439,6 @@ function GraphFeatureQuestionView({
   );
 }
 
-// =============== QUESTION IMAGE (non-hotspot types) ===============
-// Renders an optional illustrative image above the answer UI.
-// Hotspot questions manage their own image rendering and are excluded.
 function QuestionImage({ url }: { url: string }) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
@@ -469,8 +462,6 @@ function QuestionImage({ url }: { url: string }) {
     </div>
   );
 }
-
-// =============== MAIN COMPONENT ===============
 
 export default function QuizPage() {
   const router = useRouter();
@@ -619,8 +610,6 @@ export default function QuizPage() {
     };
     fetchQuiz();
   }, [id]);
-
-  // =============== HANDLERS ===============
 
   const handleTextAnswerChange = (text: string) => {
     if (currentQuestionState?.isSubmitted) return;
@@ -849,8 +838,6 @@ export default function QuizPage() {
     );
   }
 
-  // =============== RESULTS SCREEN ===============
-
   if (showResults) {
     const score = finalScore!;
     const feedback = computeStandardFeedback(questions, questionStates);
@@ -1043,8 +1030,6 @@ export default function QuizPage() {
     );
   }
 
-  // =============== QUIZ TAKING SCREEN ===============
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto p-6">
@@ -1078,7 +1063,7 @@ export default function QuizPage() {
               <div className="bg-white rounded-lg shadow-md p-6 border">
                 <h3 className="text-xl font-semibold text-gray-800 mb-4">{currentQuestion.question_text}</h3>
 
-                {/* ── Optional question image (all non-hotspot types) ── */}
+                {/* Optional question image*/}
                 {currentQuestion.question_type !== 'hotspot' && currentQuestion.image_url && (
                   <QuestionImage url={currentQuestion.image_url} />
                 )}

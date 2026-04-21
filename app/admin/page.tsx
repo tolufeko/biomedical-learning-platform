@@ -16,7 +16,7 @@ export default function AdminDashboard() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
-  // ✅ Use global auth state for access control
+  // auth state for access control
   useEffect(() => {
     if (!user) {
       router.push("/");
@@ -25,7 +25,7 @@ export default function AdminDashboard() {
     }
   }, [user, role, router]);
 
-  // ✅ Filter out current user + apply search
+  // Filter out current user then search for profiles
   useEffect(() => {
     if (!user) return;
 
@@ -40,7 +40,7 @@ export default function AdminDashboard() {
     setFilteredUsers(filtered);
   }, [searchTerm, users, user]);
 
-  // ✅ Use API route instead of direct Supabase client
+  // Fetch users using update-roles API
   const fetchUsers = async () => {
     try {
       setMessage("");
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // ✅ Use API route for updates
+  // Update user roles using update-roles API
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
       setUpdating(userId);
@@ -79,6 +79,7 @@ export default function AdminDashboard() {
     }
   };
 
+  // Confirm role before updating it
   const handleRoleChange = (userId: string, newRole: string) => {
     if (confirm(`Change role to ${newRole}?`)) {
       updateUserRole(userId, newRole);
@@ -89,7 +90,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* User Management */}
       <div className="p-6 bg-white rounded-lg shadow-md mt-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">User Management</h2>
 

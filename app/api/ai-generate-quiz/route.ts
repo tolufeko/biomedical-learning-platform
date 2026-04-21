@@ -11,9 +11,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 function buildPrompt(payload: GenerateQuizPayload): string {
   const limit = payload.maxQuestions ?? 10;
 
-  // Sanitise every user-supplied field before interpolation.
-  // IDs are reduced to alphanumeric + hyphens only — they must be echoed back
-  // by the model and used as Set keys, so they need the tightest restriction.
+  // Sanitise every user supplied field before interpolation.
   const safeTitle = untrusted(payload.title, 200);
   const safeModule = untrusted(payload.module, 200);
   const safeDescription = payload.description
@@ -24,7 +22,6 @@ function buildPrompt(payload: GenerateQuizPayload): string {
     .map((q, i) => {
       // IDs are reflected back into the response JSON, so strip to safe chars only.
       const safeId = q.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100);
-      // Type is an enum in practice; still sanitise defensively.
       const safeType = sanitizePromptInput(q.type, 50);
       const safeTopic = q.topic ? sanitizePromptInput(q.topic, 100) : null;
       const safeQuestion = untrusted(q.question, 500);
@@ -129,9 +126,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Only allow IDs that were actually in the original payload — this is the
-    // last-line-of-defence even if the model hallucinates or is manipulated
-    // into returning an unexpected ID.
+    // Only allow IDs that were actually in the original payload to protect against hallucinations
     const validIds = new Set(payload.questions.map(q => q.id));
     const filteredIds = (parsed.selectedIds ?? []).filter(id => validIds.has(id));
 
