@@ -1048,7 +1048,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
             )}
             <img
               src={question.image_url}
-              alt="Question illustration"
+              alt={`Illustration for: ${question.question || 'question'}`}
               className="w-full h-auto object-contain max-h-64"
               onError={() => handleImageError(question.id)}
               onLoad={() => handleImageLoad(question.id)}
@@ -1103,7 +1103,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onFormSubmit, initialData, 
               )}
               <img
                 src={question.image_url}
-                alt="Hotspot background"
+                alt={`Hotspot diagram for: ${question.question || 'question'}`}
                 className="w-full h-full object-contain rounded-lg"
                 onError={() => handleImageError(question.id)}
                 onLoad={() => handleImageLoad(question.id)}

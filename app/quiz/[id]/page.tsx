@@ -439,7 +439,7 @@ function GraphFeatureQuestionView({
   );
 }
 
-function QuestionImage({ url }: { url: string }) {
+function QuestionImage({ url, questionText }: { url: string; questionText: string }) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
 
@@ -454,7 +454,7 @@ function QuestionImage({ url }: { url: string }) {
       )}
       <img
         src={url}
-        alt="Question illustration"
+        alt={`Illustration for: ${questionText}`}
         className={`w-full h-auto object-contain max-h-72 transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0 absolute'}`}
         onLoad={() => setLoaded(true)}
         onError={() => setErrored(true)}
@@ -1065,7 +1065,10 @@ export default function QuizPage() {
 
                 {/* Optional question image*/}
                 {currentQuestion.question_type !== 'hotspot' && currentQuestion.image_url && (
-                  <QuestionImage url={currentQuestion.image_url} />
+                  <QuestionImage 
+                    url={currentQuestion.image_url} 
+                    questionText={currentQuestion.question_text}
+                  />
                 )}
 
                 {/* Multiple Choice */}
@@ -1143,7 +1146,7 @@ export default function QuizPage() {
                   <div className="mb-6">
                     {currentQuestion.image_url ? (
                       <div className="relative inline-block border rounded-lg bg-gray-100 overflow-hidden cursor-crosshair" onClick={handleHotspotClick}>
-                        <img src={currentQuestion.image_url} alt="Hotspot question" className="max-w-full h-auto" onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png'; }} />
+                        <img src={currentQuestion.image_url} alt={`Hotspot diagram for: ${currentQuestion.question_text}`} className="max-w-full h-auto" onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png'; }} />
                         {currentQuestionState?.answerState.type === 'hotspot' &&
                           Array.isArray(currentQuestionState.answerState.userAnswer) &&
                           currentQuestionState.answerState.userAnswer.map((spot, idx) =>
